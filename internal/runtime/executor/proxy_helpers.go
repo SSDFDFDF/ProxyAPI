@@ -2,8 +2,10 @@ package executor
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
@@ -12,6 +14,16 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v6/sdk/proxyutil"
 	log "github.com/sirupsen/logrus"
 )
+
+var proxyTransportCache sync.Map
+var resinRoundTripperCache sync.Map
+
+type resinRoundTripperCacheKey struct {
+	cfg      *config.Config
+	provider string
+	account  string
+	mode     resin.Mode
+}
 
 // newProxyAwareHTTPClient creates an HTTP client with proper proxy configuration priority:
 // 1. Use auth.ProxyURL if configured (highest priority)
@@ -84,12 +96,26 @@ func newProxyAwareHTTPClient(ctx context.Context, cfg *config.Config, auth *clip
 // Returns:
 //   - *http.Transport: A configured transport, or nil if the proxy URL is invalid
 func buildProxyTransport(proxyURL string) *http.Transport {
+	proxyURL = strings.TrimSpace(proxyURL)
+	if proxyURL == "" {
+		return nil
+	}
+	if cached, ok := proxyTransportCache.Load(proxyURL); ok {
+		if transport, okCast := cached.(*http.Transport); okCast && transport != nil {
+			return transport
+		}
+	}
 	transport, _, errBuild := proxyutil.BuildHTTPTransport(proxyURL)
 	if errBuild != nil {
 		log.Errorf("%v", errBuild)
 		return nil
 	}
-	return transport
+	if transport == nil {
+		return nil
+	}
+	actual, _ := proxyTransportCache.LoadOrStore(proxyURL, transport)
+	cached, _ := actual.(*http.Transport)
+	return cached
 }
 
 func wrapResinRoundTripper(cfg *config.Config, auth *cliproxyauth.Auth, base http.RoundTripper) http.RoundTripper {
@@ -102,16 +128,47 @@ func wrapResinRoundTripper(cfg *config.Config, auth *cliproxyauth.Auth, base htt
 		return base
 	}
 
-	wrapped, err := resin.WrapRoundTripper(cfg, base, resin.Identity{
+	identity := resin.Identity{
 		Provider: auth.Provider,
 		Account:  account,
 		Mode:     resin.ModeReverse,
-	})
+	}
+	if base != nil {
+		wrapped, err := resin.WrapRoundTripper(cfg, base, identity)
+		if err != nil {
+			log.Errorf("resin runtime routing disabled: %v", err)
+			return base
+		}
+		return wrapped
+	}
+
+	key := resinRoundTripperCacheKey{
+		cfg:      cfg,
+		provider: strings.TrimSpace(identity.Provider),
+		account:  strings.TrimSpace(identity.Account),
+		mode:     identity.Mode,
+	}
+	if cached, ok := resinRoundTripperCache.Load(key); ok {
+		if wrapped, okCast := cached.(http.RoundTripper); okCast && wrapped != nil {
+			return wrapped
+		}
+	}
+
+	wrapped, err := resin.WrapRoundTripper(cfg, nil, identity)
 	if err != nil {
 		log.Errorf("resin runtime routing disabled: %v", err)
 		return base
 	}
-	return wrapped
+	if wrapped == nil {
+		return base
+	}
+	actual, _ := resinRoundTripperCache.LoadOrStore(key, wrapped)
+	cached, ok := actual.(http.RoundTripper)
+	if !ok || cached == nil {
+		log.Errorf("resin runtime routing disabled: %v", fmt.Errorf("unexpected cached round tripper type %T", actual))
+		return base
+	}
+	return cached
 }
 
 func configWithResinForwardProxy(cfg *config.Config, auth *cliproxyauth.Auth) *config.Config {

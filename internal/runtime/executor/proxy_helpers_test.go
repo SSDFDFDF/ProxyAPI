@@ -28,3 +28,44 @@ func TestNewProxyAwareHTTPClientDirectBypassesGlobalProxy(t *testing.T) {
 		t.Fatal("expected direct transport to disable proxy function")
 	}
 }
+
+func TestNewProxyAwareHTTPClientReusesProxyTransport(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{SDKConfig: sdkconfig.SDKConfig{ProxyURL: "http://global-proxy.example.com:8080"}}
+
+	clientA := newProxyAwareHTTPClient(context.Background(), cfg, nil, 0)
+	clientB := newProxyAwareHTTPClient(context.Background(), cfg, nil, 0)
+
+	if clientA.Transport == nil || clientB.Transport == nil {
+		t.Fatalf("expected proxy-backed transports, got %T and %T", clientA.Transport, clientB.Transport)
+	}
+	if clientA.Transport != clientB.Transport {
+		t.Fatal("expected proxy-aware clients to reuse the same transport for identical proxy settings")
+	}
+}
+
+func TestNewProxyAwareHTTPClientReusesResinRoundTripper(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		SDKConfig: sdkconfig.SDKConfig{
+			ResinURL:          "http://127.0.0.1:2260/my-token",
+			ResinPlatformName: "Default",
+		},
+	}
+	auth := &cliproxyauth.Auth{
+		Provider: "codex",
+		Metadata: map[string]any{"account_id": "user@example.com"},
+	}
+
+	clientA := newProxyAwareHTTPClient(context.Background(), cfg, auth, 0)
+	clientB := newProxyAwareHTTPClient(context.Background(), cfg, auth, 0)
+
+	if clientA.Transport == nil || clientB.Transport == nil {
+		t.Fatalf("expected resin-backed transports, got %T and %T", clientA.Transport, clientB.Transport)
+	}
+	if clientA.Transport != clientB.Transport {
+		t.Fatal("expected resin-backed clients to reuse the same round tripper for identical identities")
+	}
+}

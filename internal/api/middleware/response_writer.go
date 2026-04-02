@@ -333,11 +333,7 @@ func (w *ResponseWriterWrapper) extractAPIRequest(c *gin.Context) []byte {
 	if !isExist {
 		return nil
 	}
-	data, ok := apiRequest.([]byte)
-	if !ok || len(data) == 0 {
-		return nil
-	}
-	return data
+	return bytesFromContextValue(apiRequest)
 }
 
 func (w *ResponseWriterWrapper) extractAPIResponse(c *gin.Context) []byte {
@@ -345,11 +341,7 @@ func (w *ResponseWriterWrapper) extractAPIResponse(c *gin.Context) []byte {
 	if !isExist {
 		return nil
 	}
-	data, ok := apiResponse.([]byte)
-	if !ok || len(data) == 0 {
-		return nil
-	}
-	return data
+	return bytesFromContextValue(apiResponse)
 }
 
 func (w *ResponseWriterWrapper) extractAPIResponseTimestamp(c *gin.Context) time.Time {
@@ -382,6 +374,32 @@ func (w *ResponseWriterWrapper) extractRequestBody(c *gin.Context) []byte {
 		return w.requestInfo.Body
 	}
 	return nil
+}
+
+func bytesFromContextValue(value any) []byte {
+	switch data := value.(type) {
+	case []byte:
+		if len(data) == 0 {
+			return nil
+		}
+		return data
+	case *bytes.Buffer:
+		if data == nil || data.Len() == 0 {
+			return nil
+		}
+		return data.Bytes()
+	case interface{ Bytes() []byte }:
+		if data == nil {
+			return nil
+		}
+		raw := data.Bytes()
+		if len(raw) == 0 {
+			return nil
+		}
+		return raw
+	default:
+		return nil
+	}
 }
 
 func (w *ResponseWriterWrapper) logRequest(requestBody []byte, statusCode int, headers map[string][]string, body []byte, apiRequestBody, apiResponseBody []byte, apiResponseTimestamp time.Time, apiResponseErrors []*interfaces.ErrorMessage, forceLog bool) error {

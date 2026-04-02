@@ -372,13 +372,11 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 	newCtx = context.WithValue(newCtx, "handler", handler)
 	return newCtx, func(params ...interface{}) {
 		if h.Cfg.RequestLog && len(params) == 1 {
-			if existing, exists := c.Get("API_RESPONSE"); exists {
-				if existingBytes, ok := existing.([]byte); ok && len(bytes.TrimSpace(existingBytes)) > 0 {
-					switch params[0].(type) {
-					case error, string:
-						cancel()
-						return
-					}
+			if existingBytes := contextAPIResponseBytes(c); len(bytes.TrimSpace(existingBytes)) > 0 {
+				switch params[0].(type) {
+				case error, string:
+					cancel()
+					return
 				}
 			}
 
@@ -394,13 +392,11 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 				payload = []byte(data)
 			}
 			if len(payload) > 0 {
-				if existing, exists := c.Get("API_RESPONSE"); exists {
-					if existingBytes, ok := existing.([]byte); ok && len(existingBytes) > 0 {
-						trimmedPayload := bytes.TrimSpace(payload)
-						if len(trimmedPayload) > 0 && bytes.Contains(existingBytes, trimmedPayload) {
-							cancel()
-							return
-						}
+				if existingBytes := contextAPIResponseBytes(c); len(existingBytes) > 0 {
+					trimmedPayload := bytes.TrimSpace(payload)
+					if len(trimmedPayload) > 0 && bytes.Contains(existingBytes, trimmedPayload) {
+						cancel()
+						return
 					}
 				}
 				appendAPIResponse(c, payload)
@@ -470,19 +466,49 @@ func appendAPIResponse(c *gin.Context, data []byte) {
 	}
 
 	if existing, exists := c.Get("API_RESPONSE"); exists {
-		if existingBytes, ok := existing.([]byte); ok && len(existingBytes) > 0 {
-			combined := make([]byte, 0, len(existingBytes)+len(data)+1)
-			combined = append(combined, existingBytes...)
-			if existingBytes[len(existingBytes)-1] != '\n' {
-				combined = append(combined, '\n')
+		switch value := existing.(type) {
+		case *bytes.Buffer:
+			existingBytes := value.Bytes()
+			if len(existingBytes) > 0 && existingBytes[len(existingBytes)-1] != '\n' {
+				_ = value.WriteByte('\n')
 			}
-			combined = append(combined, data...)
-			c.Set("API_RESPONSE", combined)
+			_, _ = value.Write(data)
 			return
+		case []byte:
+			if len(value) > 0 {
+				combined := make([]byte, 0, len(value)+len(data)+1)
+				combined = append(combined, value...)
+				if value[len(value)-1] != '\n' {
+					combined = append(combined, '\n')
+				}
+				combined = append(combined, data...)
+				c.Set("API_RESPONSE", combined)
+				return
+			}
 		}
 	}
 
 	c.Set("API_RESPONSE", bytes.Clone(data))
+}
+
+func contextAPIResponseBytes(c *gin.Context) []byte {
+	if c == nil {
+		return nil
+	}
+	existing, exists := c.Get("API_RESPONSE")
+	if !exists {
+		return nil
+	}
+	switch value := existing.(type) {
+	case []byte:
+		return value
+	case *bytes.Buffer:
+		return value.Bytes()
+	case interface{ Bytes() []byte }:
+		return value.Bytes()
+	default:
+		return nil
+	}
 }
 
 // ExecuteWithAuthManager executes a non-streaming request via the core auth manager.
@@ -886,12 +912,7 @@ func (h *BaseAPIHandler) WriteErrorResponse(c *gin.Context, msg *interfaces.Erro
 
 	body := BuildErrorResponseBody(status, errText)
 	// Append first to preserve upstream response logs, then drop duplicate payloads if already recorded.
-	var previous []byte
-	if existing, exists := c.Get("API_RESPONSE"); exists {
-		if existingBytes, ok := existing.([]byte); ok && len(existingBytes) > 0 {
-			previous = existingBytes
-		}
-	}
+	previous := bytes.Clone(contextAPIResponseBytes(c))
 	appendAPIResponse(c, body)
 	trimmedErrText := strings.TrimSpace(errText)
 	trimmedBody := bytes.TrimSpace(body)

@@ -2,7 +2,7 @@ version: 2
 
 before:
   hooks:
-    - cmd: bash -c 'cd web && npm ci && npx vite build && mv dist/index.html ../internal/managementasset/management.html'
+    - bash -c 'cd web && npm ci && npx vite build && mv dist/index.html ../internal/managementasset/management.html'
 
 builds:
   - id: "cli-proxy-api"
