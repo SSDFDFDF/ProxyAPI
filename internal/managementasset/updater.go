@@ -25,12 +25,11 @@ import (
 )
 
 const (
-	defaultManagementReleaseURL = "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
-	managementAssetName         = "management.html"
-	httpUserAgent               = "CLIProxyAPI-management-updater"
-	managementSyncMinInterval   = 30 * time.Second
-	updateCheckInterval         = 3 * time.Hour
-	maxAssetDownloadSize        = 50 << 20 // 50 MB safety limit for management asset downloads
+	managementAssetName       = "management.html"
+	httpUserAgent             = "CLIProxyAPI-management-updater"
+	managementSyncMinInterval = 30 * time.Second
+	updateCheckInterval       = 3 * time.Hour
+	maxAssetDownloadSize      = 50 << 20 // 50 MB safety limit for management asset downloads
 )
 
 // ManagementFileName exposes the control panel asset filename.
@@ -379,12 +378,12 @@ func updateManagementHTMLFromRemote(ctx context.Context, staticDir string, proxy
 func resolveReleaseURL(repo string) string {
 	repo = strings.TrimSpace(repo)
 	if repo == "" {
-		return defaultManagementReleaseURL
+		return ""
 	}
 
 	parsed, err := url.Parse(repo)
 	if err != nil || parsed.Host == "" {
-		return defaultManagementReleaseURL
+		return ""
 	}
 
 	host := strings.ToLower(parsed.Host)
@@ -405,12 +404,13 @@ func resolveReleaseURL(repo string) string {
 		}
 	}
 
-	return defaultManagementReleaseURL
+	return ""
 }
 
 func fetchLatestAsset(ctx context.Context, client *http.Client, releaseURL string) (*releaseAsset, string, error) {
-	if strings.TrimSpace(releaseURL) == "" {
-		releaseURL = defaultManagementReleaseURL
+	releaseURL = strings.TrimSpace(releaseURL)
+	if releaseURL == "" {
+		return nil, "", fmt.Errorf("empty release url")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releaseURL, nil)

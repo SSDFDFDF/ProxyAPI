@@ -84,6 +84,7 @@ import { resolveAuthProvider, formatQuotaResetTime } from '@/utils/quota';
 import { applyAuthFileEditableValues } from '@/features/authFiles/authFileEditor';
 import type {
   AntigravityQuotaState,
+  AuthFileItem,
   ClaudeQuotaState,
   CodexQuotaState,
   GeminiCliQuotaState,
@@ -122,6 +123,24 @@ const buildWildcardSearch = (value: string): RegExp | null => {
   if (!value.includes('*')) return null;
   const pattern = value.split('*').map(escapeWildcardSearchSegment).join('.*');
   return new RegExp(pattern, 'i');
+};
+
+const getAuthFileSearchValues = (item: AuthFileItem): string[] => {
+  const rawErrorMessage =
+    item.errorMessage ?? item['error_message'] ?? item.error ?? item['error'] ?? '';
+  const errorMessage = typeof rawErrorMessage === 'string' ? rawErrorMessage : String(rawErrorMessage);
+
+  return [
+    item.name,
+    item.type,
+    item.provider,
+    item.status,
+    getAuthFileStatusMessage(item),
+    errorMessage,
+    typeof item.note === 'string' ? item.note : '',
+  ]
+    .map((value) => (value == null ? '' : String(value)))
+    .filter((value) => value.length > 0);
 };
 
 export function AuthFilesPage() {
@@ -453,12 +472,11 @@ export function AuthFilesPage() {
 
       const matchSearch =
         !normalizedSearch ||
-        [item.name, item.type, item.provider].some((value) => {
-          const content = (value || '').toString();
-          return wildcardSearch
+        getAuthFileSearchValues(item).some((content) =>
+          wildcardSearch
             ? wildcardSearch.test(content)
-            : content.toLowerCase().includes(normalizedTerm);
-        });
+            : content.toLowerCase().includes(normalizedTerm)
+        );
       return matchType && matchStatus && matchSearch;
     });
   }, [filesMatchingProblemFilter, filter, statusFilter, normalizedSearch, wildcardSearch]);
