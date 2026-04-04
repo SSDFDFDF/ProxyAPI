@@ -1,4 +1,4 @@
-package executor
+package helps
 
 import (
 	"context"
@@ -25,7 +25,7 @@ type resinRoundTripperCacheKey struct {
 	mode     resin.Mode
 }
 
-// newProxyAwareHTTPClient creates an HTTP client with proper proxy configuration priority:
+// NewProxyAwareHTTPClient creates an HTTP client with proper proxy configuration priority:
 // 1. Use auth.ProxyURL if configured (highest priority)
 // 2. Use cfg.ProxyURL if auth proxy is not configured
 // 3. Use RoundTripper from context if neither are configured
@@ -38,7 +38,7 @@ type resinRoundTripperCacheKey struct {
 //
 // Returns:
 //   - *http.Client: An HTTP client with configured proxy or transport
-func newProxyAwareHTTPClient(ctx context.Context, cfg *config.Config, auth *cliproxyauth.Auth, timeout time.Duration) *http.Client {
+func NewProxyAwareHTTPClient(ctx context.Context, cfg *config.Config, auth *cliproxyauth.Auth, timeout time.Duration) *http.Client {
 	httpClient := &http.Client{}
 	if timeout > 0 {
 		httpClient.Timeout = timeout
@@ -85,6 +85,10 @@ func newProxyAwareHTTPClient(ctx context.Context, cfg *config.Config, auth *clip
 	}
 
 	return httpClient
+}
+
+func newProxyAwareHTTPClient(ctx context.Context, cfg *config.Config, auth *cliproxyauth.Auth, timeout time.Duration) *http.Client {
+	return NewProxyAwareHTTPClient(ctx, cfg, auth, timeout)
 }
 
 // buildProxyTransport creates an HTTP transport configured for the given proxy URL.
@@ -171,7 +175,7 @@ func wrapResinRoundTripper(cfg *config.Config, auth *cliproxyauth.Auth, base htt
 	return cached
 }
 
-func configWithResinForwardProxy(cfg *config.Config, auth *cliproxyauth.Auth) *config.Config {
+func ConfigWithResinForwardProxy(cfg *config.Config, auth *cliproxyauth.Auth) *config.Config {
 	if cfg == nil || auth == nil {
 		return cfg
 	}

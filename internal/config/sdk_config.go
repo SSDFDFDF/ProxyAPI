@@ -16,6 +16,10 @@ type SDKConfig struct {
 	// ResinPlatformName is the Platform segment Resin uses to identify the business namespace.
 	ResinPlatformName string `yaml:"resin-platform-name" json:"resin-platform-name"`
 
+	// EnableGeminiCLIEndpoint controls whether Gemini CLI internal endpoints (/v1internal:*) are enabled.
+	// Default is false for safety; when false, /v1internal:* requests are rejected.
+	EnableGeminiCLIEndpoint bool `yaml:"enable-gemini-cli-endpoint" json:"enable-gemini-cli-endpoint"`
+
 	// ForceModelPrefix requires explicit model prefixes (e.g., "teamA/gemini-3-pro-preview")
 	// to target prefixed credentials. When false, unprefixed model requests may use prefixed
 	// credentials as well.

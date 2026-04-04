@@ -16,8 +16,8 @@
 
 ## 相关文件
 
-- 机制说明：`docs/maintenance-upstream-sync_CN.md`
-- 同步记录：`docs/records-upstream-sync_CN.md`
+- 机制说明：`maintenance-upstream-sync.md`
+- 同步记录：`records-upstream-sync.md`
 
 ## 远程约定
 
@@ -29,7 +29,7 @@
 
 ## 记录原则
 
-每次准备同步、执行同步或完成同步后，都应更新 `docs/records-upstream-sync_CN.md`。
+每次准备同步、执行同步或完成同步后，都应更新 `records-upstream-sync.md`。
 
 记录至少包含以下内容：
 
@@ -76,7 +76,7 @@ git rev-list --left-right --count HEAD...upstream/main
 
 ### 2. 确认同步起点
 
-从 `docs/records-upstream-sync_CN.md` 读取最近一条已完成记录中的：
+从 `records-upstream-sync.md` 读取最近一条已完成记录中的：
 
 - `同步后基线`
 - `下次同步起点`
@@ -89,6 +89,9 @@ git rev-list --left-right --count HEAD...upstream/main
 
 - `merge upstream/main`
 - `rebase upstream/main`
+- 当本地与上游没有共同祖先，但已有人工确认的同步基线时：
+  `git diff --binary <同步基线>..upstream/main > /tmp/upstream-sync.patch`
+  `git apply --3way /tmp/upstream-sync.patch`
 
 若没有特别要求，建议优先使用 `merge`，因为：
 
@@ -106,7 +109,7 @@ git rev-list --left-right --count HEAD...upstream/main
 
 ### 5. 完成后更新记录
 
-同步完成后立即更新 `docs/records-upstream-sync_CN.md`，写明：
+同步完成后立即更新 `records-upstream-sync.md`，写明：
 
 - 本次同步纳入的上游范围
 - 产生的合并提交或 rebase 后头提交
@@ -147,4 +150,4 @@ git rev-list --left-right --count HEAD...upstream/main
 - `upstream/main`: `c10f8ae2e222c7461fdf5500bf8be8e97fee7a9e`
 - 差异计数：`0 0`
 
-因此从该提交开始，后续本地修改和上游同步将统一记录到 `docs/records-upstream-sync_CN.md`。
+因此从该提交开始，后续本地修改和上游同步将统一记录到 `records-upstream-sync.md`。
