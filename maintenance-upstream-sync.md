@@ -53,6 +53,29 @@
 - 让后续所有自定义提交都能相对该基线追踪
 - 为未来同步时的冲突分析提供固定起点
 
+## 本仓库默认策略
+
+本仓库已经确认存在“记录基线一致，但 Git 历史无共同祖先”的情况。
+
+因此后续同步时，默认不要直接执行：
+
+```bash
+git merge --allow-unrelated-histories upstream/main
+```
+
+原因是这会把大量同路径文件识别为 `add/add` 冲突，机械冲突很多，处理成本高。
+
+本仓库后续默认优先使用“基于记录基线的补丁式同步”：
+
+1. 从 `records-upstream-sync.md` 读取 `下次同步起点`，记为 `<同步基线>`
+2. 先分析 `git log` / `git diff --stat` 看上游改了什么
+3. 用 `git diff --binary <同步基线>..upstream/main` 生成增量补丁
+4. 先执行 `git apply --check --3way` 评估冲突
+5. 再执行 `git apply --3way` 或 `git apply --3way --index` 正式同步
+6. 只处理真正重叠的冲突文件
+
+这样更接近“把上游自上次基线以来的增量应用到当前分支”，通常比直接 merge 更省事。
+
 ## 推荐同步流程
 
 ### 1. 同步前确认
@@ -98,6 +121,84 @@ git rev-list --left-right --count HEAD...upstream/main
 - 历史更直观
 - 更适合长期维护 fork
 - 冲突点更容易从记录中追溯
+
+但对本仓库当前形态，更推荐优先使用“补丁式同步”，因为它和已有记录基线机制更一致。
+
+### 3.1 简化版流程
+
+如果只是做一次常规上游同步，建议直接按下面顺序执行：
+
+1. 从 `records-upstream-sync.md` 取出上次的 `下次同步起点`，记为 `<同步基线>`
+2. 执行 `git fetch upstream --prune`
+3. 执行 `git log --oneline <同步基线>..upstream/main | sed -n '1,80p'`
+4. 执行 `git diff --stat <同步基线>..upstream/main`
+5. 执行 `git diff --binary <同步基线>..upstream/main > /tmp/upstream-sync.patch`
+6. 执行 `git apply --check --3way /tmp/upstream-sync.patch`
+7. 若检查通过，再执行 `git apply --3way --index /tmp/upstream-sync.patch`
+8. 处理冲突并 `git add` 已解决文件
+9. 执行 `go test ./...`
+10. 更新 `records-upstream-sync.md`
+11. 提交同步结果
+
+### 3.2 推荐命令模板
+
+下面这组命令适合复制后稍作替换直接执行：
+
+```bash
+# 1) 填写上次记录中的“下次同步起点”
+BASE=<同步基线>
+
+# 2) 获取上游最新内容
+git fetch upstream --prune
+
+# 3) 先看这次上游到底改了什么
+git log --oneline ${BASE}..upstream/main | sed -n '1,80p'
+git diff --stat ${BASE}..upstream/main
+
+# 4) 生成补丁并先做三方检查
+git diff --binary ${BASE}..upstream/main > /tmp/upstream-sync.patch
+git apply --check --3way /tmp/upstream-sync.patch
+
+# 5) 正式应用
+git apply --3way --index /tmp/upstream-sync.patch
+
+# 6) 解决冲突后验证
+git status --short
+go test ./...
+```
+
+如果只想先看会不会冲突，不想立刻改工作树，那么只执行到 `git apply --check --3way` 即可。
+
+### 3.3 如何判断哪些上游改动值得同步
+
+为了减少不必要的人工合并，建议把上游改动分成“优先同步”和“可选同步”。
+
+优先同步：
+
+- 安全修复
+- 鉴权流程修复
+- 与上游 API 协议兼容性相关的改动
+- websocket / SSE / 流式响应修复
+- 模型列表与关键默认配置更新
+- 能覆盖上述行为的测试修复
+
+可选同步：
+
+- 纯文案调整
+- README 截图或展示位变化
+- 仅重构命名、不影响当前 fork 行为的整理
+- 当前分支未使用的目录或功能改动
+
+如果某部分上游改动评估后“收益不大，但冲突很多”，可以明确记录为“本次未纳入”，不必强行同步。
+
+### 3.4 提交建议
+
+为了让后续追踪更清楚，建议至少拆成两个提交：
+
+1. 代码同步提交
+2. 记录更新提交
+
+这样下次回看时，更容易区分“功能变化”和“维护记录变化”。
 
 ### 4. 处理冲突
 
