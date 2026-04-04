@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
+import { InfoPanel } from '@/components/ui/InfoPanel';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
@@ -226,11 +227,13 @@ export function LoginPage() {
                 <div className={styles.subtitle}>{t('login.subtitle')}</div>
               </div>
 
-              <div className={styles.connectionBox}>
-                <div className={styles.label}>{t('login.connection_current')}</div>
-                <div className={styles.value}>{apiBase || detectedBase}</div>
-                <div className={styles.hint}>{t('login.connection_auto_hint')}</div>
-              </div>
+              <InfoPanel
+                className={styles.connectionBox}
+                variant="dashed"
+                title={t('login.connection_current')}
+                value={apiBase || detectedBase}
+                hint={t('login.connection_auto_hint')}
+              />
 
               <div className={styles.toggleAdvanced}>
                 <SelectionCheckbox

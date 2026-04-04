@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -7,17 +7,23 @@ import {
   CodexSection,
   GeminiSection,
   OpenAISection,
+  PROVIDER_CATALOG,
   VertexSection,
-  ProviderNav,
+  type ProviderId,
   useProviderStats,
 } from '@/components/providers';
+import { PageFilterSection } from '@/components/ui/PageFilterSection';
+import { FilterTabs, type FilterTabItem } from '@/components/ui/FilterTabs';
+import { PageTitleBlock } from '@/components/ui/PageTitleBlock';
 import {
+  hasAmpcodeConfigContent,
   withDisableAllModelsRule,
   withoutDisableAllModelsRule,
 } from '@/components/providers/utils';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { ampcodeApi, providersApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore, useThemeStore } from '@/stores';
+import { getTypeColor, type ResolvedTheme } from '@/features/authFiles/constants';
 import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';
 import styles from './AiProvidersPage.module.scss';
 
@@ -55,6 +61,7 @@ export function AiProvidersPage() {
   );
 
   const [configSwitchingKey, setConfigSwitchingKey] = useState<string | null>(null);
+  const hasUserSelectedProviderRef = useRef(false);
 
   const disableControls = connectionStatus !== 'connected';
   const isSwitching = Boolean(configSwitchingKey);
@@ -131,6 +138,99 @@ export function AiProvidersPage() {
   ]);
 
   useHeaderRefresh(refreshKeyStats);
+
+  const providerCounts = useMemo<Record<ProviderId, number>>(
+    () => ({
+      gemini: geminiKeys.length,
+      codex: codexConfigs.length,
+      claude: claudeConfigs.length,
+      vertex: vertexConfigs.length,
+      ampcode: hasAmpcodeConfigContent(config?.ampcode) ? 1 : 0,
+      openai: openaiProviders.length,
+    }),
+    [
+      claudeConfigs.length,
+      codexConfigs.length,
+      config?.ampcode,
+      geminiKeys.length,
+      openaiProviders.length,
+      vertexConfigs.length,
+    ]
+  );
+
+  const totalConfigCount = useMemo(
+    () => Object.values(providerCounts).reduce((sum, count) => sum + count, 0),
+    [providerCounts]
+  );
+
+  const defaultProvider = useMemo<ProviderId>(
+    () => PROVIDER_CATALOG.find((provider) => providerCounts[provider.id] > 0)?.id ?? 'gemini',
+    [providerCounts]
+  );
+  const [activeProvider, setActiveProvider] = useState<ProviderId>(defaultProvider);
+
+  const resolveProviderTabColor = useCallback(
+    (providerId: ProviderId): { bg: string; text: string } => {
+      if (providerId === 'openai') {
+        return resolvedTheme === 'dark'
+          ? { bg: '#163c2d', text: '#81d9af' }
+          : { bg: '#e4f7ed', text: '#117a4d' };
+      }
+      if (providerId === 'ampcode') {
+        return resolvedTheme === 'dark'
+          ? { bg: '#403523', text: '#f3d18e' }
+          : { bg: '#fff3dc', text: '#a96d08' };
+      }
+      return getTypeColor(providerId, resolvedTheme as ResolvedTheme);
+    },
+    [resolvedTheme]
+  );
+
+  useEffect(() => {
+    setActiveProvider((previousProvider) => {
+      if (hasUserSelectedProviderRef.current) {
+        return previousProvider ?? defaultProvider;
+      }
+      if (providerCounts[previousProvider] > 0) {
+        return previousProvider;
+      }
+      return defaultProvider;
+    });
+  }, [defaultProvider, providerCounts]);
+
+  const handleProviderTabClick = useCallback((providerId: ProviderId) => {
+    hasUserSelectedProviderRef.current = true;
+    setActiveProvider(providerId);
+  }, []);
+
+  const providerTabItems = useMemo<FilterTabItem[]>(
+    () =>
+      PROVIDER_CATALOG.map((provider) => {
+        const color = resolveProviderTabColor(provider.id);
+        const buttonStyle = {
+          '--filter-color': color.text,
+          '--filter-surface': color.bg,
+          '--filter-active-text': resolvedTheme === 'dark' ? '#111827' : '#ffffff',
+        } as CSSProperties;
+
+        return {
+          id: provider.id,
+          label: provider.label,
+          active: activeProvider === provider.id,
+          count: providerCounts[provider.id],
+          style: buttonStyle,
+          icon: (
+            <img
+              src={provider.getIcon(resolvedTheme as ResolvedTheme)}
+              alt=""
+              className={styles.providerFilterIcon}
+            />
+          ),
+          onClick: () => handleProviderTabClick(provider.id),
+        };
+      }),
+    [activeProvider, handleProviderTabClick, providerCounts, resolveProviderTabColor, resolvedTheme]
+  );
 
   const openEditor = useCallback(
     (path: string) => {
@@ -352,13 +452,10 @@ export function AiProvidersPage() {
     });
   };
 
-  return (
-    <div className={styles.container}>
-      <h1 className={styles.pageTitle}>{t('ai_providers.title')}</h1>
-      <div className={styles.content}>
-        {error && <div className="error-box">{error}</div>}
-
-        <div id="provider-gemini">
+  const activeProviderSection = useMemo(() => {
+    switch (activeProvider) {
+      case 'gemini':
+        return (
           <GeminiSection
             configs={geminiKeys}
             keyStats={keyStats}
@@ -371,9 +468,9 @@ export function AiProvidersPage() {
             onDelete={deleteGemini}
             onToggle={(index, enabled) => void setConfigEnabled('gemini', index, enabled)}
           />
-        </div>
-
-        <div id="provider-codex">
+        );
+      case 'codex':
+        return (
           <CodexSection
             configs={codexConfigs}
             keyStats={keyStats}
@@ -386,9 +483,9 @@ export function AiProvidersPage() {
             onDelete={(index) => void deleteProviderEntry('codex', index)}
             onToggle={(index, enabled) => void setConfigEnabled('codex', index, enabled)}
           />
-        </div>
-
-        <div id="provider-claude">
+        );
+      case 'claude':
+        return (
           <ClaudeSection
             configs={claudeConfigs}
             keyStats={keyStats}
@@ -401,9 +498,9 @@ export function AiProvidersPage() {
             onDelete={(index) => void deleteProviderEntry('claude', index)}
             onToggle={(index, enabled) => void setConfigEnabled('claude', index, enabled)}
           />
-        </div>
-
-        <div id="provider-vertex">
+        );
+      case 'vertex':
+        return (
           <VertexSection
             configs={vertexConfigs}
             keyStats={keyStats}
@@ -416,9 +513,9 @@ export function AiProvidersPage() {
             onDelete={deleteVertex}
             onToggle={(index, enabled) => void setConfigEnabled('vertex', index, enabled)}
           />
-        </div>
-
-        <div id="provider-ampcode">
+        );
+      case 'ampcode':
+        return (
           <AmpcodeSection
             config={config?.ampcode}
             loading={loading}
@@ -426,9 +523,10 @@ export function AiProvidersPage() {
             isSwitching={isSwitching}
             onEdit={() => openEditor('/ai-providers/ampcode')}
           />
-        </div>
-
-        <div id="provider-openai">
+        );
+      case 'openai':
+      default:
+        return (
           <OpenAISection
             configs={openaiProviders}
             keyStats={keyStats}
@@ -441,10 +539,46 @@ export function AiProvidersPage() {
             onEdit={(index) => openEditor(`/ai-providers/openai/${index}`)}
             onDelete={deleteOpenai}
           />
-        </div>
-      </div>
+        );
+    }
+  }, [
+    activeProvider,
+    claudeConfigs,
+    codexConfigs,
+    config?.ampcode,
+    deleteGemini,
+    deleteProviderEntry,
+    deleteOpenai,
+    deleteVertex,
+    disableControls,
+    geminiKeys,
+    isSwitching,
+    keyStats,
+    loading,
+    openEditor,
+    openaiProviders,
+    resolvedTheme,
+    setConfigEnabled,
+    usageDetails,
+    vertexConfigs,
+  ]);
 
-      <ProviderNav />
+  return (
+    <div className={styles.container}>
+      <PageTitleBlock
+        title={t('ai_providers.title')}
+        description={t('ai_providers.description', {
+          defaultValue: '集中管理各 AI 提供商配置、模型与连接状态。',
+        })}
+        count={totalConfigCount}
+      />
+      <div className={styles.content}>
+        {error && <div className="error-box">{error}</div>}
+        <PageFilterSection>
+          <FilterTabs items={providerTabItems} />
+        </PageFilterSection>
+        {activeProviderSection}
+      </div>
     </div>
   );
 }

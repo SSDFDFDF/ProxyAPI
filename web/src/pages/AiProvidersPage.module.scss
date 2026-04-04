@@ -1,35 +1,24 @@
 @use '../styles/variables' as *;
 @use '../styles/mixins' as *;
-
 .container {
   width: 100%;
-}
-
-.cardTitle {
   display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-}
-
-.cardTitleIcon {
-  width: 24px;
-  height: 24px;
-}
-
-.pageTitle {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0 0 $spacing-xl 0;
+  flex-direction: column;
+  gap: $spacing-lg;
 }
 
 .content {
   display: flex;
   flex-direction: column;
-  gap: $spacing-xl;
-  padding-bottom: calc(
-    var(--provider-nav-height, 60px) + 12px + env(safe-area-inset-bottom) + #{$spacing-md}
-  );
+  gap: $spacing-lg;
+  padding-bottom: calc(env(safe-area-inset-bottom) + #{$spacing-md});
+}
+
+.providerFilterIcon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
 
 .section {

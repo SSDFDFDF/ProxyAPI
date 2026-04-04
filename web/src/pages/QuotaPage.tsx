@@ -2,10 +2,13 @@
  * Quota management page - coordinates the three quota sections.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PageFilterSection } from '@/components/ui/PageFilterSection';
+import { FilterTabs, type FilterTabItem } from '@/components/ui/FilterTabs';
+import { PageTitleBlock } from '@/components/ui/PageTitleBlock';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
-import { useAuthStore } from '@/stores';
+import { useAuthStore, useThemeStore } from '@/stores';
 import { authFilesApi, configFileApi } from '@/services/api';
 import {
   QuotaSection,
@@ -16,6 +19,11 @@ import {
   KIMI_CONFIG
 } from '@/components/quota';
 import type { AuthFileItem } from '@/types';
+import {
+  getAuthFileIcon,
+  getTypeColor,
+  type ResolvedTheme,
+} from '@/features/authFiles/constants';
 import styles from './QuotaPage.module.scss';
 
 const QUOTA_TABS = [
@@ -29,6 +37,7 @@ const QUOTA_TABS = [
 export function QuotaPage() {
   const { t } = useTranslation();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
+  const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
 
   const [files, setFiles] = useState<AuthFileItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +51,35 @@ export function QuotaPage() {
         count: files.filter((file) => tab.config.filterFn(file)).length,
       })),
     [files]
+  );
+  const quotaTabItems = useMemo<FilterTabItem[]>(
+    () =>
+      quotaTabs.map((tab) => {
+        const iconSrc = getAuthFileIcon(tab.id, resolvedTheme);
+        const color = getTypeColor(tab.id, resolvedTheme);
+        const buttonStyle = {
+          '--filter-color': color.text,
+          '--filter-surface': color.bg,
+          '--filter-active-text': resolvedTheme === 'dark' ? '#111827' : '#ffffff',
+        } as CSSProperties;
+
+        return {
+          id: tab.id,
+          label: tab.label,
+          active: activeTab === tab.id,
+          count: tab.count,
+          style: buttonStyle,
+          icon: iconSrc ? (
+            <img src={iconSrc} alt="" className={styles.filterTagIcon} />
+          ) : (
+            <span className={styles.filterTagIconFallback}>
+              {tab.label.slice(0, 1).toUpperCase()}
+            </span>
+          ),
+          onClick: () => setActiveTab(tab.id),
+        };
+      }),
+    [activeTab, quotaTabs, resolvedTheme]
   );
 
   const activeConfig = quotaTabs.find((tab) => tab.id === activeTab)?.config;
@@ -84,31 +122,17 @@ export function QuotaPage() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.pageHeader}>
-        <h1 className={styles.pageTitle}>{t('quota_management.title')}</h1>
-        <p className={styles.description}>{t('quota_management.description')}</p>
-      </div>
+      <PageTitleBlock
+        title={t('quota_management.title')}
+        description={t('quota_management.description')}
+        count={files.length}
+      />
 
       {error && <div className={styles.errorBox}>{error}</div>}
 
-      <div className={styles.filterSection}>
-        <div className={styles.filterRail}>
-          <div className={styles.filterTags}>
-            {quotaTabs.map((tab) => (
-              <button
-                key={tab.id}
-                className={[styles.filterTag, activeTab === tab.id ? styles.filterTagActive : ''].filter(Boolean).join(' ')}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                <span className={styles.filterTagLabel}>
-                  <span className={styles.filterTagText}>{tab.label}</span>
-                </span>
-                <span className={styles.filterTagCount}>{tab.count}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      <PageFilterSection>
+        <FilterTabs items={quotaTabItems} />
+      </PageFilterSection>
 
       {activeConfig && (
         <QuotaSection

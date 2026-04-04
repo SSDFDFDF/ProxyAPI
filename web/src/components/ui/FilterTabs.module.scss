@@ -1,0 +1,38 @@
+@use '../../styles/filterTabs' as filterTabs;
+
+.filterRail {
+  @include filterTabs.rail;
+}
+
+.filterTags {
+  @include filterTabs.tags;
+}
+
+.filterTag {
+  @include filterTabs.tag;
+}
+
+.filterTagActive {
+  @include filterTabs.tag-active;
+}
+
+.filterTagLabel {
+  @include filterTabs.tag-label;
+}
+
+.filterTagIconWrap {
+  @include filterTabs.tag-icon-wrap;
+}
+
+.filterTagText {
+  @include filterTabs.tag-text;
+}
+
+.filterTagCount {
+  @include filterTabs.tag-count;
+}
+
+.filterTagActive .filterTagCount {
+  background: color-mix(in srgb, var(--filter-color, var(--primary-color)) 15%, transparent);
+  color: var(--filter-color, var(--primary-color));
+}

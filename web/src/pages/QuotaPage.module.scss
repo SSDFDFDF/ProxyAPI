@@ -1,30 +1,9 @@
 @use '../styles/variables' as *;
 @use '../styles/mixins' as *;
-@use '../styles/filterTabs' as filterTabs;
-
 .container {
   display: flex;
   flex-direction: column;
   gap: $spacing-lg;
-}
-
-.pageHeader {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-sm;
-}
-
-.pageTitle {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.description {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin: 0;
 }
 
 .headerActions {
@@ -50,64 +29,18 @@
   }
 }
 
-// 选项卡 / 筛选区域
-.filterSection {
-  @include filterTabs.section;
-}
-
-.filterRail {
-  @include filterTabs.rail;
-}
-
-.filterTags {
-  @include filterTabs.tags;
-}
-
-.filterTag {
-  @include filterTabs.tag;
-}
-
-.filterTagActive {
-  @include filterTabs.tag-active;
-}
-
-.filterTagLabel {
-  @include filterTabs.tag-label;
-}
-
-.filterTagText {
-  @include filterTabs.tag-text;
-}
-
-.filterTagCount {
-  @include filterTabs.tag-count;
-}
-
-.filterTagActive .filterTagCount {
-  background: color-mix(in srgb, var(--filter-color, var(--primary-color)) 15%, transparent);
+.filterTagIconFallback {
   color: var(--filter-color, var(--primary-color));
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
 }
 
-.titleWrapper {
-  display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-  line-height: 24px;
-}
-
-.countBadge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 24px;
-  min-width: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--count-badge-text);
-  background-color: var(--count-badge-bg);
-  box-sizing: border-box;
+.filterTagIcon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
 
 .errorBox {
@@ -120,20 +53,36 @@
 }
 
 .pageSizeSelect {
-  padding: 8px 12px;
+  min-width: 88px;
+  width: 88px;
+
+  :global(.select-trigger) {
+    min-height: 38px;
+    height: 38px;
+  }
+}
+
+.pageSizeControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  min-height: 38px;
   border: 1px solid var(--border-color);
   border-radius: $radius-md;
   background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 14px;
-  cursor: text;
-  height: 38px;
-  box-sizing: border-box;
 
-  &:focus {
-    outline: none;
-    border-color: var(--primary-color);
+  @include mobile {
+    width: 100%;
+    justify-content: space-between;
   }
+}
+
+.pageSizeLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .statsInfo {
@@ -156,7 +105,7 @@
 .kimiGrid {
   display: grid;
   gap: $spacing-md;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 
   @include mobile {
     grid-template-columns: 1fr;

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { InfoPanel } from '@/components/ui/InfoPanel';
 import { Input } from '@/components/ui/Input';
+import { KeyValueList, type KeyValueListItem } from '@/components/ui/KeyValueList';
+import { PageTitleBlock } from '@/components/ui/PageTitleBlock';
+import { SectionCard } from '@/components/ui/SectionCard';
 import { useNotificationStore, useThemeStore } from '@/stores';
 import { oauthApi, type OAuthProvider, type IFlowCookieAuthResponse } from '@/services/api/oauth';
 import { vertexApi, type VertexImportResponse } from '@/services/api/vertex';
@@ -93,6 +96,7 @@ export function OAuthPage() {
   const { t } = useTranslation();
   const { showNotification } = useNotificationStore();
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
+  const oauthCardCount = PROVIDERS.length + 2;
   const [states, setStates] = useState<Record<OAuthProvider, ProviderState>>({} as Record<OAuthProvider, ProviderState>);
   const [iflowCookie, setIflowCookie] = useState<IFlowCookieState>({ cookie: '', loading: false });
   const [vertexState, setVertexState] = useState<VertexImportState>({
@@ -336,27 +340,86 @@ export function OAuthPage() {
     }
   };
 
+  const vertexResultItems: KeyValueListItem[] = [];
+  if (vertexState.result?.projectId) {
+    vertexResultItems.push({
+      key: 'project-id',
+      label: t('vertex_import.result_project'),
+      value: vertexState.result.projectId,
+    });
+  }
+  if (vertexState.result?.email) {
+    vertexResultItems.push({
+      key: 'email',
+      label: t('vertex_import.result_email'),
+      value: vertexState.result.email,
+    });
+  }
+  if (vertexState.result?.location) {
+    vertexResultItems.push({
+      key: 'location',
+      label: t('vertex_import.result_location'),
+      value: vertexState.result.location,
+    });
+  }
+  if (vertexState.result?.authFile) {
+    vertexResultItems.push({
+      key: 'auth-file',
+      label: t('vertex_import.result_file'),
+      value: vertexState.result.authFile,
+    });
+  }
+
+  const iflowResultItems: KeyValueListItem[] = [];
+  if (iflowCookie.result?.status === 'ok' && iflowCookie.result.email) {
+    iflowResultItems.push({
+      key: 'email',
+      label: t('auth_login.iflow_cookie_result_email'),
+      value: iflowCookie.result.email,
+    });
+  }
+  if (iflowCookie.result?.status === 'ok' && iflowCookie.result.expired) {
+    iflowResultItems.push({
+      key: 'expired',
+      label: t('auth_login.iflow_cookie_result_expired'),
+      value: iflowCookie.result.expired,
+    });
+  }
+  if (iflowCookie.result?.status === 'ok' && iflowCookie.result.saved_path) {
+    iflowResultItems.push({
+      key: 'saved-path',
+      label: t('auth_login.iflow_cookie_result_path'),
+      value: iflowCookie.result.saved_path,
+    });
+  }
+  if (iflowCookie.result?.status === 'ok' && iflowCookie.result.type) {
+    iflowResultItems.push({
+      key: 'type',
+      label: t('auth_login.iflow_cookie_result_type'),
+      value: iflowCookie.result.type,
+    });
+  }
+
   return (
     <div className={styles.container}>
-      <h1 className={styles.pageTitle}>{t('nav.oauth', { defaultValue: 'OAuth' })}</h1>
+      <PageTitleBlock
+        title={t('nav.oauth', { defaultValue: 'OAuth' })}
+        description={t('auth_login.page_description', {
+          defaultValue: '统一管理 OAuth 登录链接、回调授权、Vertex 凭证导入与 iFlow Cookie 登录。',
+        })}
+        count={oauthCardCount}
+      />
 
       <div className={styles.content}>
-        {PROVIDERS.map((provider) => {
-          const state = states[provider.id] || {};
-          const canSubmitCallback = CALLBACK_SUPPORTED.includes(provider.id) && Boolean(state.url);
-          return (
-            <div key={provider.id}>
-              <Card
-                title={
-                  <span className={styles.cardTitle}>
-                    <img
-                      src={getIcon(provider.icon, resolvedTheme)}
-                      alt=""
-                      className={styles.cardTitleIcon}
-                    />
-                    {t(provider.titleKey)}
-                  </span>
-                }
+        <div className={styles.oauthGrid}>
+          {PROVIDERS.map((provider) => {
+            const state = states[provider.id] || {};
+            const canSubmitCallback = CALLBACK_SUPPORTED.includes(provider.id) && Boolean(state.url);
+            return (
+              <SectionCard
+                key={provider.id}
+                title={t(provider.titleKey)}
+                iconSrc={getIcon(provider.icon, resolvedTheme)}
                 extra={
                   <Button onClick={() => startAuth(provider.id)} loading={state.polling}>
                     {t('common.login')}
@@ -384,22 +447,25 @@ export function OAuthPage() {
                     </div>
                   )}
                   {state.url && (
-                    <div className={styles.authUrlBox}>
-                      <div className={styles.authUrlLabel}>{t(provider.urlLabelKey)}</div>
-                      <div className={styles.authUrlValue}>{state.url}</div>
-                      <div className={styles.authUrlActions}>
-                        <Button variant="secondary" size="sm" onClick={() => copyLink(state.url!)}>
-                          {t(getAuthKey(provider.id, 'copy_link'))}
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => window.open(state.url, '_blank', 'noopener,noreferrer')}
-                        >
-                          {t(getAuthKey(provider.id, 'open_link'))}
-                        </Button>
-                      </div>
-                    </div>
+                    <InfoPanel
+                      title={t(provider.urlLabelKey)}
+                      value={state.url}
+                      variant="dashed"
+                      actions={
+                        <>
+                          <Button variant="secondary" size="sm" onClick={() => copyLink(state.url!)}>
+                            {t(getAuthKey(provider.id, 'copy_link'))}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => window.open(state.url, '_blank', 'noopener,noreferrer')}
+                          >
+                            {t(getAuthKey(provider.id, 'open_link'))}
+                          </Button>
+                        </>
+                      }
+                    />
                   )}
                   {canSubmitCallback && (
                     <div className={styles.callbackSection}>
@@ -448,171 +514,109 @@ export function OAuthPage() {
                     </div>
                   )}
                 </div>
-              </Card>
-            </div>
-          );
-        })}
+              </SectionCard>
+            );
+          })}
 
-        {/* Vertex JSON 登录 */}
-        <Card
-          title={
-            <span className={styles.cardTitle}>
-              <img src={iconVertex} alt="" className={styles.cardTitleIcon} />
-              {t('vertex_import.title')}
-            </span>
-          }
-          extra={
-            <Button onClick={handleVertexImport} loading={vertexState.loading}>
-              {t('vertex_import.import_button')}
-            </Button>
-          }
-        >
-          <div className={styles.cardContent}>
-            <div className={styles.cardHint}>{t('vertex_import.description')}</div>
-            <Input
-              label={t('vertex_import.location_label')}
-              hint={t('vertex_import.location_hint')}
-              value={vertexState.location}
-              onChange={(e) =>
-                setVertexState((prev) => ({
-                  ...prev,
-                  location: e.target.value
-                }))
-              }
-              placeholder={t('vertex_import.location_placeholder')}
-            />
-            <div className={styles.formItem}>
-              <label className={styles.formItemLabel}>{t('vertex_import.file_label')}</label>
-              <div className={styles.filePicker}>
-                <Button variant="secondary" size="sm" onClick={handleVertexFilePick}>
-                  {t('vertex_import.choose_file')}
-                </Button>
-                <div
-                  className={`${styles.fileName} ${
-                    vertexState.fileName ? '' : styles.fileNamePlaceholder
-                  }`.trim()}
-                >
-                  {vertexState.fileName || t('vertex_import.file_placeholder')}
-                </div>
-              </div>
-              <div className={styles.cardHintSecondary}>{t('vertex_import.file_hint')}</div>
-              <input
-                ref={vertexFileInputRef}
-                type="file"
-                accept=".json,application/json"
-                style={{ display: 'none' }}
-                onChange={handleVertexFileChange}
-              />
-            </div>
-            {vertexState.error && (
-              <div className="status-badge error">
-                {vertexState.error}
-              </div>
-            )}
-            {vertexState.result && (
-              <div className={styles.connectionBox}>
-                <div className={styles.connectionLabel}>{t('vertex_import.result_title')}</div>
-                <div className={styles.keyValueList}>
-                  {vertexState.result.projectId && (
-                    <div className={styles.keyValueItem}>
-                      <span className={styles.keyValueKey}>{t('vertex_import.result_project')}</span>
-                      <span className={styles.keyValueValue}>{vertexState.result.projectId}</span>
-                    </div>
-                  )}
-                  {vertexState.result.email && (
-                    <div className={styles.keyValueItem}>
-                      <span className={styles.keyValueKey}>{t('vertex_import.result_email')}</span>
-                      <span className={styles.keyValueValue}>{vertexState.result.email}</span>
-                    </div>
-                  )}
-                  {vertexState.result.location && (
-                    <div className={styles.keyValueItem}>
-                      <span className={styles.keyValueKey}>{t('vertex_import.result_location')}</span>
-                      <span className={styles.keyValueValue}>{vertexState.result.location}</span>
-                    </div>
-                  )}
-                  {vertexState.result.authFile && (
-                    <div className={styles.keyValueItem}>
-                      <span className={styles.keyValueKey}>{t('vertex_import.result_file')}</span>
-                      <span className={styles.keyValueValue}>{vertexState.result.authFile}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
-
-        {/* iFlow Cookie 登录 */}
-        <Card
-          title={
-            <span className={styles.cardTitle}>
-              <img src={iconIflow} alt="" className={styles.cardTitleIcon} />
-              {t('auth_login.iflow_cookie_title')}
-            </span>
-          }
-          extra={
-            <Button onClick={submitIflowCookie} loading={iflowCookie.loading}>
-              {t('auth_login.iflow_cookie_button')}
-            </Button>
-          }
-        >
-          <div className={styles.cardContent}>
-            <div className={styles.cardHint}>{t('auth_login.iflow_cookie_hint')}</div>
-            <div className={styles.cardHintSecondary}>
-              {t('auth_login.iflow_cookie_key_hint')}
-            </div>
-            <div className={styles.formItem}>
-              <label className={styles.formItemLabel}>{t('auth_login.iflow_cookie_label')}</label>
+          <SectionCard
+            title={t('vertex_import.title')}
+            iconSrc={iconVertex}
+            extra={
+              <Button onClick={handleVertexImport} loading={vertexState.loading}>
+                {t('vertex_import.import_button')}
+              </Button>
+            }
+          >
+            <div className={styles.cardContent}>
+              <div className={styles.cardHint}>{t('vertex_import.description')}</div>
               <Input
-                value={iflowCookie.cookie}
-                onChange={(e) => setIflowCookie((prev) => ({ ...prev, cookie: e.target.value }))}
-                placeholder={t('auth_login.iflow_cookie_placeholder')}
+                label={t('vertex_import.location_label')}
+                hint={t('vertex_import.location_hint')}
+                value={vertexState.location}
+                onChange={(e) =>
+                  setVertexState((prev) => ({
+                    ...prev,
+                    location: e.target.value
+                  }))
+                }
+                placeholder={t('vertex_import.location_placeholder')}
               />
-            </div>
-            {iflowCookie.error && (
-              <div
-                className={`status-badge ${iflowCookie.errorType === 'warning' ? 'warning' : 'error'}`}
-              >
-                {iflowCookie.errorType === 'warning'
-                  ? t('auth_login.iflow_cookie_status_duplicate')
-                  : t('auth_login.iflow_cookie_status_error')}{' '}
-                {iflowCookie.error}
-              </div>
-            )}
-            {iflowCookie.result && iflowCookie.result.status === 'ok' && (
-              <div className={styles.connectionBox}>
-                <div className={styles.connectionLabel}>{t('auth_login.iflow_cookie_result_title')}</div>
-                <div className={styles.keyValueList}>
-                  {iflowCookie.result.email && (
-                    <div className={styles.keyValueItem}>
-                      <span className={styles.keyValueKey}>{t('auth_login.iflow_cookie_result_email')}</span>
-                      <span className={styles.keyValueValue}>{iflowCookie.result.email}</span>
-                    </div>
-                  )}
-                  {iflowCookie.result.expired && (
-                    <div className={styles.keyValueItem}>
-                      <span className={styles.keyValueKey}>{t('auth_login.iflow_cookie_result_expired')}</span>
-                      <span className={styles.keyValueValue}>{iflowCookie.result.expired}</span>
-                    </div>
-                  )}
-                  {iflowCookie.result.saved_path && (
-                    <div className={styles.keyValueItem}>
-                      <span className={styles.keyValueKey}>{t('auth_login.iflow_cookie_result_path')}</span>
-                      <span className={styles.keyValueValue}>{iflowCookie.result.saved_path}</span>
-                    </div>
-                  )}
-                  {iflowCookie.result.type && (
-                    <div className={styles.keyValueItem}>
-                      <span className={styles.keyValueKey}>{t('auth_login.iflow_cookie_result_type')}</span>
-                      <span className={styles.keyValueValue}>{iflowCookie.result.type}</span>
-                    </div>
-                  )}
+              <div className={styles.formItem}>
+                <label className={styles.formItemLabel}>{t('vertex_import.file_label')}</label>
+                <div className={styles.filePicker}>
+                  <Button variant="secondary" size="sm" onClick={handleVertexFilePick}>
+                    {t('vertex_import.choose_file')}
+                  </Button>
+                  <div
+                    className={`${styles.fileName} ${
+                      vertexState.fileName ? '' : styles.fileNamePlaceholder
+                    }`.trim()}
+                  >
+                    {vertexState.fileName || t('vertex_import.file_placeholder')}
+                  </div>
                 </div>
+                <div className={styles.cardHintSecondary}>{t('vertex_import.file_hint')}</div>
+                <input
+                  ref={vertexFileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  style={{ display: 'none' }}
+                  onChange={handleVertexFileChange}
+                />
               </div>
-            )}
-          </div>
-        </Card>
+              {vertexState.error && (
+                <div className="status-badge error">
+                  {vertexState.error}
+                </div>
+              )}
+              {vertexResultItems.length > 0 && (
+                <InfoPanel title={t('vertex_import.result_title')}>
+                  <KeyValueList items={vertexResultItems} />
+                </InfoPanel>
+              )}
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title={t('auth_login.iflow_cookie_title')}
+            iconSrc={iconIflow}
+            extra={
+              <Button onClick={submitIflowCookie} loading={iflowCookie.loading}>
+                {t('auth_login.iflow_cookie_button')}
+              </Button>
+            }
+          >
+            <div className={styles.cardContent}>
+              <div className={styles.cardHint}>{t('auth_login.iflow_cookie_hint')}</div>
+              <div className={styles.cardHintSecondary}>
+                {t('auth_login.iflow_cookie_key_hint')}
+              </div>
+              <div className={styles.formItem}>
+                <label className={styles.formItemLabel}>{t('auth_login.iflow_cookie_label')}</label>
+                <Input
+                  value={iflowCookie.cookie}
+                  onChange={(e) => setIflowCookie((prev) => ({ ...prev, cookie: e.target.value }))}
+                  placeholder={t('auth_login.iflow_cookie_placeholder')}
+                />
+              </div>
+              {iflowCookie.error && (
+                <div
+                  className={`status-badge ${iflowCookie.errorType === 'warning' ? 'warning' : 'error'}`}
+                >
+                  {iflowCookie.errorType === 'warning'
+                    ? t('auth_login.iflow_cookie_status_duplicate')
+                    : t('auth_login.iflow_cookie_status_error')}{' '}
+                  {iflowCookie.error}
+                </div>
+              )}
+              {iflowResultItems.length > 0 && (
+                <InfoPanel title={t('auth_login.iflow_cookie_result_title')}>
+                  <KeyValueList items={iflowResultItems} />
+                </InfoPanel>
+              )}
+            </div>
+          </SectionCard>
+        </div>
       </div>
     </div>
   );

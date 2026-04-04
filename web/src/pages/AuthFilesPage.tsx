@@ -15,8 +15,10 @@ import { animate } from 'motion/mini';
 import type { AnimationPlaybackControlsWithThen } from 'motion-dom';
 import { useInterval } from '@/hooks/useInterval';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { FilterTabs, type FilterTabItem } from '@/components/ui/FilterTabs';
+import { PageFilterSection } from '@/components/ui/PageFilterSection';
+import { PageTitleBlock } from '@/components/ui/PageTitleBlock';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
@@ -116,8 +118,7 @@ type QuotaSummaryItem = {
   actionable?: boolean;
 };
 
-const escapeWildcardSearchSegment = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapeWildcardSearchSegment = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const buildWildcardSearch = (value: string): RegExp | null => {
   if (!value.includes('*')) return null;
@@ -128,7 +129,8 @@ const buildWildcardSearch = (value: string): RegExp | null => {
 const getAuthFileSearchValues = (item: AuthFileItem): string[] => {
   const rawErrorMessage =
     item.errorMessage ?? item['error_message'] ?? item.error ?? item['error'] ?? '';
-  const errorMessage = typeof rawErrorMessage === 'string' ? rawErrorMessage : String(rawErrorMessage);
+  const errorMessage =
+    typeof rawErrorMessage === 'string' ? rawErrorMessage : String(rawErrorMessage);
 
   return [
     item.name,
@@ -156,7 +158,9 @@ export function AuthFilesPage() {
   const kimiQuota = useQuotaStore((state) => state.kimiQuota);
 
   const [filter, setFilter] = useState<'all' | string>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled' | 'warning' | 'virtual'>('all');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'active' | 'disabled' | 'warning' | 'virtual'
+  >('all');
   const [problemOnly, setProblemOnly] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
   const [search, setSearch] = useState('');
@@ -170,7 +174,8 @@ export function AuthFilesPage() {
   const [quotaRefreshingNames, setQuotaRefreshingNames] = useState<Record<string, boolean>>({});
   const [batchFieldsModalOpen, setBatchFieldsModalOpen] = useState(false);
   const [batchFieldsSaving, setBatchFieldsSaving] = useState(false);
-  const [batchFields, setBatchFields] = useState<BatchAuthFileFieldsState>(INITIAL_BATCH_FIELD_STATE);
+  const [batchFields, setBatchFields] =
+    useState<BatchAuthFileFieldsState>(INITIAL_BATCH_FIELD_STATE);
   const [uiStateHydrated, setUiStateHydrated] = useState(false);
   const floatingBatchActionsRef = useRef<HTMLDivElement>(null);
   const batchActionAnimationRef = useRef<AnimationPlaybackControlsWithThen | null>(null);
@@ -278,10 +283,7 @@ export function AuthFilesPage() {
       if (typeof persisted.problemOnly === 'boolean') {
         setProblemOnly(persisted.problemOnly);
       }
-      if (
-        typeof persistedCompactMode !== 'boolean' &&
-        typeof persisted.compactMode === 'boolean'
-      ) {
+      if (typeof persistedCompactMode !== 'boolean' && typeof persisted.compactMode === 'boolean') {
         setCompactMode(persisted.compactMode);
       }
       if (typeof persisted.search === 'string') {
@@ -394,12 +396,9 @@ export function AuthFilesPage() {
     loadModelAlias();
   }, [loadFiles, loadKeyStats, loadExcluded, loadModelAlias]);
 
-  useInterval(
-    () => {
-      void refreshKeyStats().catch(() => {});
-    },
-    240_000
-  );
+  useInterval(() => {
+    void refreshKeyStats().catch(() => {});
+  }, 240_000);
 
   const existingTypes = useMemo(() => {
     const types = new Set<string>(['all']);
@@ -549,12 +548,15 @@ export function AuthFilesPage() {
     }));
   }, []);
 
-  const handleBatchFieldChange = useCallback((field: BatchEditableFieldKey, value: string | boolean) => {
-    setBatchFields((prev) => ({
-      ...prev,
-      [field]: { ...prev[field], value } as BatchAuthFileFieldsState[BatchEditableFieldKey],
-    }));
-  }, []);
+  const handleBatchFieldChange = useCallback(
+    (field: BatchEditableFieldKey, value: string | boolean) => {
+      setBatchFields((prev) => ({
+        ...prev,
+        [field]: { ...prev[field], value } as BatchAuthFileFieldsState[BatchEditableFieldKey],
+      }));
+    },
+    []
+  );
 
   const handleCloseBatchFieldsModal = useCallback(() => {
     if (batchFieldsSaving) return;
@@ -604,12 +606,11 @@ export function AuthFilesPage() {
 
           if (!batchNeedsJsonSave) {
             const trimmed = batchFields.priority.value.trim();
-            const priorityValue =
-              !batchFields.priority.enabled
-                ? undefined
-                : !trimmed
-                  ? 0
-                  : Number.parseInt(trimmed, 10);
+            const priorityValue = !batchFields.priority.enabled
+              ? undefined
+              : !trimmed
+                ? 0
+                : Number.parseInt(trimmed, 10);
 
             return authFilesApi.patchFields({
               name,
@@ -621,8 +622,12 @@ export function AuthFilesPage() {
           }
 
           const json = await authFilesApi.downloadJsonObject(name);
-          const normalizedType = String(file.type ?? '').trim().toLowerCase();
-          const normalizedProvider = String(file.provider ?? '').trim().toLowerCase();
+          const normalizedType = String(file.type ?? '')
+            .trim()
+            .toLowerCase();
+          const normalizedProvider = String(file.provider ?? '')
+            .trim()
+            .toLowerCase();
           const isCodexFile = normalizedType === 'codex' || normalizedProvider === 'codex';
           const nextJson = applyAuthFileEditableValues(
             json,
@@ -683,7 +688,16 @@ export function AuthFilesPage() {
     } finally {
       setBatchFieldsSaving(false);
     }
-  }, [batchFields, fileMap, loadFiles, refreshKeyStats, resetBatchFieldsState, selectedNames, showNotification, t]);
+  }, [
+    batchFields,
+    fileMap,
+    loadFiles,
+    refreshKeyStats,
+    resetBatchFieldsState,
+    selectedNames,
+    showNotification,
+    t,
+  ]);
 
   const handleBatchQuotaRefresh = useCallback(async () => {
     if (batchQuotaButtonDisabled) return;
@@ -884,63 +898,43 @@ export function AuthFilesPage() {
     []
   );
 
-  const renderFilterTags = () => (
-    <div className={styles.filterRail}>
-      <div className={styles.filterTags}>
-        {existingTypes.map((type) => {
-          const isActive = filter === type;
-          const iconSrc = getAuthFileIcon(type, resolvedTheme);
-          const color =
-            type === 'all'
-              ? { bg: 'var(--bg-tertiary)', text: 'var(--text-primary)' }
-              : getTypeColor(type, resolvedTheme);
-          const buttonStyle = {
-            '--filter-color': color.text,
-            '--filter-surface': color.bg,
-            '--filter-active-text': resolvedTheme === 'dark' ? '#111827' : '#ffffff',
-          } as CSSProperties;
+  const filterTabItems = useMemo<FilterTabItem[]>(
+    () =>
+      existingTypes.map((type) => {
+        const iconSrc = getAuthFileIcon(type, resolvedTheme);
+        const color =
+          type === 'all'
+            ? { bg: 'var(--bg-tertiary)', text: 'var(--text-primary)' }
+            : getTypeColor(type, resolvedTheme);
+        const buttonStyle = {
+          '--filter-color': color.text,
+          '--filter-surface': color.bg,
+          '--filter-active-text': resolvedTheme === 'dark' ? '#111827' : '#ffffff',
+        } as CSSProperties;
 
-          return (
-            <button
-              key={type}
-              className={`${styles.filterTag} ${isActive ? styles.filterTagActive : ''}`}
-              style={buttonStyle}
-              onClick={() => {
-                setFilter(type);
-                setPage(1);
-              }}
-            >
-              <span className={styles.filterTagLabel}>
-                {type === 'all' ? (
-                  <span className={styles.filterTagIconWrap}>
-                    <IconFilterAll className={styles.filterAllIcon} size={16} />
-                  </span>
-                ) : (
-                  <span className={styles.filterTagIconWrap}>
-                    {iconSrc ? (
-                      <img src={iconSrc} alt="" className={styles.filterTagIcon} />
-                    ) : (
-                      <span className={styles.filterTagIconFallback}>
-                        {getTypeLabel(t, type).slice(0, 1).toUpperCase()}
-                      </span>
-                    )}
-                  </span>
-                )}
-                <span className={styles.filterTagText}>{getTypeLabel(t, type)}</span>
+        return {
+          id: type,
+          label: getTypeLabel(t, type),
+          active: filter === type,
+          count: typeCounts[type] ?? 0,
+          style: buttonStyle,
+          icon:
+            type === 'all' ? (
+              <IconFilterAll className={styles.filterAllIcon} size={16} />
+            ) : iconSrc ? (
+              <img src={iconSrc} alt="" className={styles.filterTagIcon} />
+            ) : (
+              <span className={styles.filterTagIconFallback}>
+                {getTypeLabel(t, type).slice(0, 1).toUpperCase()}
               </span>
-              <span className={styles.filterTagCount}>{typeCounts[type] ?? 0}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  const titleNode = (
-    <div className={styles.titleWrapper}>
-      <span>{t('auth_files.title_section')}</span>
-      {files.length > 0 && <span className={styles.countBadge}>{files.length}</span>}
-    </div>
+            ),
+          onClick: () => {
+            setFilter(type);
+            setPage(1);
+          },
+        };
+      }),
+    [existingTypes, filter, resolvedTheme, t, typeCounts]
   );
 
   const deleteAllButtonLabel = problemOnly
@@ -1117,228 +1111,243 @@ export function AuthFilesPage() {
             <th className={styles.compactTableFileCol}>{t('auth_files.title_section')}</th>
             <th className={styles.compactTableQuotaCol}>{t('nav.quota_management')}</th>
             <th className={styles.compactTableHealthCol}>{t('auth_files.health_status_label')}</th>
-            <th className={styles.compactTableActionsCol}>{t('common.actions', { defaultValue: '操作' })}</th>
+            <th className={styles.compactTableActionsCol}>
+              {t('common.actions', { defaultValue: '操作' })}
+            </th>
           </tr>
         </thead>
         <tbody>
           {pageItems.map((file) => {
-        const isRuntimeOnly = isRuntimeOnlyAuthFile(file);
-        const selected = selectedFiles.has(file.name);
-        const statusMessage = getAuthFileStatusMessage(file);
-        const hasStatusWarning = Boolean(statusMessage) && !file.disabled && !isRuntimeOnly;
-        const typeLabel = getTypeLabel(t, file.type || 'unknown');
-        const typeColor = getTypeColor(file.type || 'unknown', resolvedTheme);
-        const providerIcon = getAuthFileIcon(file.type || 'unknown', resolvedTheme);
-        const priorityValue = parsePriorityValue(file.priority ?? file['priority']);
-        const showModelsButton = !isRuntimeOnly || (file.type || '').toLowerCase() === 'aistudio';
-        const quotaSummary = resolveQuotaSummary(file);
-        const stateLabel = isRuntimeOnly
-          ? t('auth_files.type_virtual')
-          : file.disabled
-            ? t('auth_files.health_status_disabled')
-            : hasStatusWarning
-              ? t('auth_files.health_status_warning')
-              : t('auth_files.status_toggle_label');
-        const stateBadgeClass = isRuntimeOnly
-          ? styles.stateBadgeVirtual
-          : file.disabled
-            ? styles.stateBadgeDisabled
-            : hasStatusWarning
-              ? styles.stateBadgeWarning
-              : styles.stateBadgeActive;
-        const authIndexKey = normalizeAuthIndex(file['auth_index'] ?? file.authIndex ?? null) ?? '';
-        const statusData = statusBarCache.get(authIndexKey) ?? calculateStatusBarData([]);
+            const isRuntimeOnly = isRuntimeOnlyAuthFile(file);
+            const selected = selectedFiles.has(file.name);
+            const statusMessage = getAuthFileStatusMessage(file);
+            const hasStatusWarning = Boolean(statusMessage) && !file.disabled && !isRuntimeOnly;
+            const typeLabel = getTypeLabel(t, file.type || 'unknown');
+            const typeColor = getTypeColor(file.type || 'unknown', resolvedTheme);
+            const providerIcon = getAuthFileIcon(file.type || 'unknown', resolvedTheme);
+            const priorityValue = parsePriorityValue(file.priority ?? file['priority']);
+            const showModelsButton =
+              !isRuntimeOnly || (file.type || '').toLowerCase() === 'aistudio';
+            const quotaSummary = resolveQuotaSummary(file);
+            const stateLabel = isRuntimeOnly
+              ? t('auth_files.type_virtual')
+              : file.disabled
+                ? t('auth_files.health_status_disabled')
+                : hasStatusWarning
+                  ? t('auth_files.health_status_warning')
+                  : t('auth_files.status_toggle_label');
+            const stateBadgeClass = isRuntimeOnly
+              ? styles.stateBadgeVirtual
+              : file.disabled
+                ? styles.stateBadgeDisabled
+                : hasStatusWarning
+                  ? styles.stateBadgeWarning
+                  : styles.stateBadgeActive;
+            const authIndexKey =
+              normalizeAuthIndex(file['auth_index'] ?? file.authIndex ?? null) ?? '';
+            const statusData = statusBarCache.get(authIndexKey) ?? calculateStatusBarData([]);
 
-        return (
-          <tr
-            key={file.name}
-            className={selected ? styles.compactTableRowSelected : ''}
-          >
-            <td className={styles.compactTableSelectCol}>
-              {!isRuntimeOnly ? (
-                <SelectionCheckbox
-                  checked={selected}
-                  onChange={() => toggleSelect(file.name)}
-                  aria-label={
-                    selected ? t('auth_files.batch_deselect') : t('auth_files.batch_select_all')
-                  }
-                  title={
-                    selected ? t('auth_files.batch_deselect') : t('auth_files.batch_select_all')
-                  }
-                />
-              ) : (
-                <span className={styles.compactListPlaceholder}>-</span>
-              )}
-            </td>
+            return (
+              <tr key={file.name} className={selected ? styles.compactTableRowSelected : ''}>
+                <td className={styles.compactTableSelectCol}>
+                  {!isRuntimeOnly ? (
+                    <SelectionCheckbox
+                      checked={selected}
+                      onChange={() => toggleSelect(file.name)}
+                      aria-label={
+                        selected ? t('auth_files.batch_deselect') : t('auth_files.batch_select_all')
+                      }
+                      title={
+                        selected ? t('auth_files.batch_deselect') : t('auth_files.batch_select_all')
+                      }
+                    />
+                  ) : (
+                    <span className={styles.compactListPlaceholder}>-</span>
+                  )}
+                </td>
 
-            <td>
-              <div className={styles.compactListMain}>
-              <div className={styles.compactListIdentity}>
-                <div
-                  className={styles.compactListTypeBadge}
-                  style={{
-                    backgroundColor: typeColor.bg,
-                    color: typeColor.text,
-                    ...(typeColor.border ? { border: typeColor.border } : {}),
-                  }}
-                >
-                  {providerIcon ? (
-                    <img src={providerIcon} alt="" className={styles.compactListTypeIcon} />
-                  ) : null}
-                  <span>{typeLabel}</span>
-                </div>
-                <div className={styles.compactListNameWrap}>
-                  <div className={styles.compactListName} title={file.name}>
-                    {file.name}
-                  </div>
-                  {typeof file.note === 'string' && file.note.trim() ? (
-                    <div className={styles.compactListNote} title={file.note.trim()}>
-                      {file.note.trim()}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-              <div className={styles.compactListMeta}>
-                <span>
-                  {t('auth_files.file_size')}: {file.size ? formatFileSize(file.size) : '-'}
-                </span>
-                <span>{t('auth_files.file_modified')}: {formatModified(file)}</span>
-                {priorityValue !== undefined ? (
-                  <span>{t('auth_files.priority_display')}: {priorityValue}</span>
-                ) : null}
-                <span className={`${styles.stateBadge} ${stateBadgeClass}`}>{stateLabel}</span>
-              </div>
-
-              {statusMessage ? (
-                <div
-                  className={`${styles.compactListStatusMessage} ${
-                    hasStatusWarning ? styles.compactListStatusWarning : ''
-                  }`}
-                  title={statusMessage}
-                >
-                  <IconInfo size={12} />
-                  <span>{statusMessage}</span>
-                </div>
-              ) : null}
-              </div>
-            </td>
-
-            <td>
-              <div className={styles.compactListQuotaColumn}>
-              {quotaSummary?.length ? (
-                quotaSummary.map((item) => (
-                  <div
-                    key={`${file.name}-${item.label}-${item.subtext ?? ''}`}
-                    className={`${styles.compactListQuotaCard} ${
-                      item.tone === 'danger'
-                        ? styles.compactListQuotaCardDanger
-                        : item.tone === 'muted'
-                          ? styles.compactListQuotaCardMuted
-                          : ''
-                    }`}
-                  >
-                    {item.actionable ? (
-                      <button
-                        type="button"
-                        className={`${styles.quotaMessage} ${styles.quotaMessageAction}`}
-                        onClick={() => void handleSingleQuotaRefresh(file)}
-                        disabled={disableControls || quotaRefreshingNames[file.name]}
+                <td>
+                  <div className={styles.compactListMain}>
+                    <div className={styles.compactListIdentity}>
+                      <div
+                        className={styles.compactListTypeBadge}
+                        style={{
+                          backgroundColor: typeColor.bg,
+                          color: typeColor.text,
+                          ...(typeColor.border ? { border: typeColor.border } : {}),
+                        }}
                       >
-                        {item.label}
-                      </button>
-                    ) : (
-                      <>
-                        <div className={styles.compactListQuotaHeader}>
-                          <span className={styles.compactListQuotaLabel}>{item.label}</span>
-                          {item.value ? (
-                            <span className={styles.compactListQuotaValue}>{item.value}</span>
-                          ) : null}
-                        </div>
-                        <div className={styles.compactListQuotaBar}>
-                          <div
-                            className={styles.compactListQuotaBarFill}
-                            style={{ width: `${Math.max(0, Math.min(100, item.percent ?? 0))}%` }}
-                          />
-                        </div>
-                        {item.subtext ? (
-                          <div className={styles.compactListQuotaSubtext}>{item.subtext}</div>
+                        {providerIcon ? (
+                          <img src={providerIcon} alt="" className={styles.compactListTypeIcon} />
                         ) : null}
-                      </>
+                        <span>{typeLabel}</span>
+                      </div>
+                      <div className={styles.compactListNameWrap}>
+                        <div className={styles.compactListName} title={file.name}>
+                          {file.name}
+                        </div>
+                        {typeof file.note === 'string' && file.note.trim() ? (
+                          <div className={styles.compactListNote} title={file.note.trim()}>
+                            {file.note.trim()}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className={styles.compactListMeta}>
+                      <span>
+                        {t('auth_files.file_size')}: {file.size ? formatFileSize(file.size) : '-'}
+                      </span>
+                      <span>
+                        {t('auth_files.file_modified')}: {formatModified(file)}
+                      </span>
+                      {priorityValue !== undefined ? (
+                        <span>
+                          {t('auth_files.priority_display')}: {priorityValue}
+                        </span>
+                      ) : null}
+                      <span className={`${styles.stateBadge} ${stateBadgeClass}`}>
+                        {stateLabel}
+                      </span>
+                    </div>
+
+                    {statusMessage ? (
+                      <div
+                        className={`${styles.compactListStatusMessage} ${
+                          hasStatusWarning ? styles.compactListStatusWarning : ''
+                        }`}
+                        title={statusMessage}
+                      >
+                        <IconInfo size={12} />
+                        <span>{statusMessage}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                </td>
+
+                <td>
+                  <div className={styles.compactListQuotaColumn}>
+                    {quotaSummary?.length ? (
+                      quotaSummary.map((item) => (
+                        <div
+                          key={`${file.name}-${item.label}-${item.subtext ?? ''}`}
+                          className={`${styles.compactListQuotaCard} ${
+                            item.tone === 'danger'
+                              ? styles.compactListQuotaCardDanger
+                              : item.tone === 'muted'
+                                ? styles.compactListQuotaCardMuted
+                                : ''
+                          }`}
+                        >
+                          {item.actionable ? (
+                            <button
+                              type="button"
+                              className={`${styles.quotaMessage} ${styles.quotaMessageAction}`}
+                              onClick={() => void handleSingleQuotaRefresh(file)}
+                              disabled={disableControls || quotaRefreshingNames[file.name]}
+                            >
+                              {item.label}
+                            </button>
+                          ) : (
+                            <>
+                              <div className={styles.compactListQuotaHeader}>
+                                <span className={styles.compactListQuotaLabel}>{item.label}</span>
+                                {item.value ? (
+                                  <span className={styles.compactListQuotaValue}>{item.value}</span>
+                                ) : null}
+                              </div>
+                              <div className={styles.compactListQuotaBar}>
+                                <div
+                                  className={styles.compactListQuotaBarFill}
+                                  style={{
+                                    width: `${Math.max(0, Math.min(100, item.percent ?? 0))}%`,
+                                  }}
+                                />
+                              </div>
+                              {item.subtext ? (
+                                <div className={styles.compactListQuotaSubtext}>{item.subtext}</div>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div
+                        className={`${styles.compactListQuotaCard} ${styles.compactListQuotaCardMuted}`}
+                      >
+                        <div className={styles.compactListQuotaHeader}>
+                          <span className={styles.compactListQuotaLabel}>-</span>
+                        </div>
+                      </div>
                     )}
                   </div>
-                ))
-              ) : (
-                <div className={`${styles.compactListQuotaCard} ${styles.compactListQuotaCardMuted}`}>
-                  <div className={styles.compactListQuotaHeader}>
-                    <span className={styles.compactListQuotaLabel}>-</span>
+                </td>
+
+                <td>
+                  <div className={styles.compactListStats}>
+                    <ProviderStatusBar statusData={statusData} styles={styles} />
+                    <div className={styles.compactListStatsCounts}>
+                      <span className={styles.compactListStatsSuccess}>
+                        {statusData.totalSuccess}
+                      </span>
+                      <span className={styles.compactListStatsDivider}>/</span>
+                      <span className={styles.compactListStatsFailure}>
+                        {statusData.totalFailure}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
-              </div>
-            </td>
+                </td>
 
-            <td>
-              <div className={styles.compactListStats}>
-                <ProviderStatusBar statusData={statusData} styles={styles} />
-                <div className={styles.compactListStatsCounts}>
-                  <span className={styles.compactListStatsSuccess}>{statusData.totalSuccess}</span>
-                  <span className={styles.compactListStatsDivider}>/</span>
-                  <span className={styles.compactListStatsFailure}>{statusData.totalFailure}</span>
-                </div>
-              </div>
-            </td>
-
-            <td>
-              <div className={styles.compactListActions}>
-              {showModelsButton ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => showModels(file)}
-                  title={t('auth_files.models_button', { defaultValue: '模型' })}
-                >
-                  <IconModelCluster size={14} />
-                </Button>
-              ) : null}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => openPrefixProxyEditor(file)}
-                title={t('auth_files.prefix_proxy_manage', { defaultValue: '前缀代理' })}
-              >
-                <IconSettings size={14} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDownload(file.name)}
-                title={t('common.download')}
-              >
-                <IconDownload size={14} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDelete(file.name)}
-                disabled={disableControls || deleting === file.name}
-                title={t('common.delete')}
-              >
-                <IconTrash2 size={14} />
-              </Button>
-              {!isRuntimeOnly ? (
-                <div className={styles.compactListToggle}>
-                  <ToggleSwitch
-                    checked={!file.disabled}
-                    onChange={(value) => handleStatusToggle(file, value)}
-                    disabled={disableControls || statusUpdating[file.name]}
-                    ariaLabel={t('auth_files.status_toggle_label')}
-                  />
-                </div>
-              ) : null}
-              </div>
-            </td>
-          </tr>
-        );
+                <td>
+                  <div className={styles.compactListActions}>
+                    {showModelsButton ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => showModels(file)}
+                        title={t('auth_files.models_button', { defaultValue: '模型' })}
+                      >
+                        <IconModelCluster size={14} />
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openPrefixProxyEditor(file)}
+                      title={t('auth_files.prefix_proxy_manage', { defaultValue: '前缀代理' })}
+                    >
+                      <IconSettings size={14} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDownload(file.name)}
+                      title={t('common.download')}
+                    >
+                      <IconDownload size={14} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(file.name)}
+                      disabled={disableControls || deleting === file.name}
+                      title={t('common.delete')}
+                    >
+                      <IconTrash2 size={14} />
+                    </Button>
+                    {!isRuntimeOnly ? (
+                      <div className={styles.compactListToggle}>
+                        <ToggleSwitch
+                          checked={!file.disabled}
+                          onChange={(value) => handleStatusToggle(file, value)}
+                          disabled={disableControls || statusUpdating[file.name]}
+                          ariaLabel={t('auth_files.status_toggle_label')}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
+            );
           })}
         </tbody>
       </table>
@@ -1348,56 +1357,57 @@ export function AuthFilesPage() {
   return (
     <div className={styles.container}>
       <div className={styles.pageHeader}>
-        <h1 className={styles.pageTitle}>{t('auth_files.title')}</h1>
-        <p className={styles.description}>{t('auth_files.description')}</p>
+        <PageTitleBlock
+          title={t('auth_files.title')}
+          description={t('auth_files.description')}
+          count={files.length}
+          className={styles.pageHeaderCopy}
+        />
+
+        <div className={styles.headerActions}>
+          <Button variant="secondary" size="sm" onClick={handleHeaderRefresh} disabled={loading}>
+            {t('common.refresh')}
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleUploadClick}
+            disabled={disableControls || uploading}
+            loading={uploading}
+          >
+            {t('auth_files.upload_button')}
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() =>
+              handleDeleteAll({
+                filter,
+                problemOnly,
+                onResetFilterToAll: () => setFilter('all'),
+                onResetProblemOnly: () => setProblemOnly(false),
+              })
+            }
+            disabled={disableControls || loading || deletingAll}
+            loading={deletingAll}
+          >
+            {deleteAllButtonLabel}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            multiple
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
+        </div>
       </div>
 
-      <Card
-        title={titleNode}
-        extra={
-          <div className={styles.headerActions}>
-            <Button variant="secondary" size="sm" onClick={handleHeaderRefresh} disabled={loading}>
-              {t('common.refresh')}
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleUploadClick}
-              disabled={disableControls || uploading}
-              loading={uploading}
-            >
-              {t('auth_files.upload_button')}
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() =>
-                handleDeleteAll({
-                  filter,
-                  problemOnly,
-                  onResetFilterToAll: () => setFilter('all'),
-                  onResetProblemOnly: () => setProblemOnly(false),
-                })
-              }
-              disabled={disableControls || loading || deletingAll}
-              loading={deletingAll}
-            >
-              {deleteAllButtonLabel}
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json,application/json"
-              multiple
-              style={{ display: 'none' }}
-              onChange={handleFileChange}
-            />
-          </div>
-        }
-      >
+      <section className={styles.mainSection}>
         {error && <div className={styles.errorBox}>{error}</div>}
 
-        <div className={styles.filterSection}>
-          {renderFilterTags()}
+        <PageFilterSection className={styles.filterSection}>
+          <FilterTabs items={filterTabItems} />
 
           <div className={styles.filterContent}>
             <div className={styles.filterControlsPanel}>
@@ -1433,7 +1443,9 @@ export function AuthFilesPage() {
                   />
                 </div>
                 <div className={`${styles.filterItem} ${styles.filterCompactItem}`}>
-                  <span className={styles.filterItemLabel}>{t('auth_files.status_filter_label')}</span>
+                  <span className={styles.filterItemLabel}>
+                    {t('auth_files.status_filter_label')}
+                  </span>
                   <Select
                     className={styles.sortSelect}
                     value={statusFilter}
@@ -1559,34 +1571,36 @@ export function AuthFilesPage() {
               </div>
             )}
           </div>
-        </div>
-      </Card>
+        </PageFilterSection>
+      </section>
 
-      <OAuthExcludedCard
-        disableControls={disableControls}
-        excludedError={excludedError}
-        excluded={excluded}
-        onAdd={() => openExcludedEditor()}
-        onEdit={openExcludedEditor}
-        onDelete={deleteExcluded}
-      />
+      <div className={styles.oauthCardsGrid}>
+        <OAuthExcludedCard
+          disableControls={disableControls}
+          excludedError={excludedError}
+          excluded={excluded}
+          onAdd={() => openExcludedEditor()}
+          onEdit={openExcludedEditor}
+          onDelete={deleteExcluded}
+        />
 
-      <OAuthModelAliasCard
-        disableControls={disableControls}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        onAdd={() => openModelAliasEditor()}
-        onEditProvider={openModelAliasEditor}
-        onDeleteProvider={deleteModelAlias}
-        modelAliasError={modelAliasError}
-        modelAlias={modelAlias}
-        allProviderModels={allProviderModels}
-        onUpdate={handleMappingUpdate}
-        onDeleteLink={handleDeleteLink}
-        onToggleFork={handleToggleFork}
-        onRenameAlias={handleRenameAlias}
-        onDeleteAlias={handleDeleteAlias}
-      />
+        <OAuthModelAliasCard
+          disableControls={disableControls}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          onAdd={() => openModelAliasEditor()}
+          onEditProvider={openModelAliasEditor}
+          onDeleteProvider={deleteModelAlias}
+          modelAliasError={modelAliasError}
+          modelAlias={modelAlias}
+          allProviderModels={allProviderModels}
+          onUpdate={handleMappingUpdate}
+          onDeleteLink={handleDeleteLink}
+          onToggleFork={handleToggleFork}
+          onRenameAlias={handleRenameAlias}
+          onDeleteAlias={handleDeleteAlias}
+        />
+      </div>
 
       <AuthFileModelsModal
         open={modelsModalOpen}

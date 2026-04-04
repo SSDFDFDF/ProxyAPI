@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TitleWithCount } from '@/components/ui/PageTitleBlock';
+import { Select } from '@/components/ui/Select';
 import { triggerHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import type { AuthFileItem, ResolvedTheme } from '@/types';
@@ -25,8 +27,13 @@ type QuotaSetter<T> = (updater: QuotaUpdater<T>) => void;
 
 type ViewMode = 'paged' | 'all';
 
+const DEFAULT_ITEMS_PER_PAGE = 12;
 const MAX_ITEMS_PER_PAGE = 100;
 const MAX_SHOW_ALL_THRESHOLD = 100;
+const PAGE_SIZE_OPTIONS = [6, 12, 24, 48, MAX_ITEMS_PER_PAGE].map((value) => ({
+  value: String(value),
+  label: String(value),
+}));
 
 interface QuotaPaginationState<T> {
   pageSize: number;
@@ -41,7 +48,10 @@ interface QuotaPaginationState<T> {
   setLoading: (loading: boolean, scope?: 'page' | 'all' | null) => void;
 }
 
-const useQuotaPagination = <T,>(items: T[], defaultPageSize = 6): QuotaPaginationState<T> => {
+const useQuotaPagination = <T,>(
+  items: T[],
+  defaultPageSize = DEFAULT_ITEMS_PER_PAGE
+): QuotaPaginationState<T> => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSizeState] = useState(defaultPageSize);
   const [loading, setLoadingState] = useState(false);
@@ -111,8 +121,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     Record<string, TState>
   >;
 
-  /* Removed useRef */
-  const [columns, gridRef] = useGridColumns(380); // Min card width 380px matches SCSS
+  const [, gridRef] = useGridColumns(300); // Keep JS-side width heuristic aligned with the grid CSS
   const [viewMode, setViewMode] = useState<ViewMode>('paged');
   const [showTooManyWarning, setShowTooManyWarning] = useState(false);
 
@@ -134,6 +143,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     loading: sectionLoading,
     setLoading
   } = useQuotaPagination(filteredFiles);
+  const visibleItems = effectiveViewMode === 'all' ? filteredFiles : pageItems;
 
   useEffect(() => {
     if (showAllAllowed) return;
@@ -150,16 +160,6 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       cancelled = true;
     };
   }, [showAllAllowed, viewMode]);
-
-  // Update page size based on view mode and columns
-  useEffect(() => {
-    if (effectiveViewMode === 'all') {
-      setPageSize(Math.max(1, filteredFiles.length));
-    } else {
-      // Paged mode: display up to 100 per page as requested
-      setPageSize(MAX_ITEMS_PER_PAGE);
-    }
-  }, [effectiveViewMode, columns, filteredFiles.length, setPageSize]);
 
   const { quota, loadQuota } = useQuotaLoader(config);
 
@@ -238,14 +238,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   );
 
   const titleNode = (
-    <div className={styles.titleWrapper}>
-      <span>{t(`${config.i18nPrefix}.title`)}</span>
-      {filteredFiles.length > 0 && (
-        <span className={styles.countBadge}>
-          {filteredFiles.length}
-        </span>
-      )}
-    </div>
+    <TitleWithCount title={t(`${config.i18nPrefix}.title`)} count={filteredFiles.length} />
   );
 
   const isRefreshing = sectionLoading || loading;
@@ -283,6 +276,19 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
               {t('auth_files.view_mode_all')}
             </Button>
           </div>
+          {effectiveViewMode === 'paged' && (
+            <div className={styles.pageSizeControl}>
+              <span className={styles.pageSizeLabel}>{t('auth_files.page_size_label')}</span>
+              <Select
+                className={styles.pageSizeSelect}
+                value={String(pageSize)}
+                options={PAGE_SIZE_OPTIONS}
+                onChange={(value) => setPageSize(Number.parseInt(value, 10) || DEFAULT_ITEMS_PER_PAGE)}
+                ariaLabel={t('auth_files.page_size_label')}
+                fullWidth={false}
+              />
+            </div>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -307,7 +313,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       ) : (
         <>
           <div ref={gridRef} className={config.gridClassName}>
-            {pageItems.map((item) => (
+            {visibleItems.map((item) => (
               <QuotaCard
                 key={item.name}
                 item={item}

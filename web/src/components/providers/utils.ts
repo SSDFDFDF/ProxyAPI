@@ -208,3 +208,12 @@ export const buildAmpcodeFormState = (ampcode?: AmpcodeConfig | null): AmpcodeFo
   mappingEntries: ampcodeMappingsToEntries(ampcode?.modelMappings),
   upstreamApiKeyEntries: ampcodeUpstreamApiKeysToEntries(ampcode?.upstreamApiKeys),
 });
+
+export const hasAmpcodeConfigContent = (ampcode?: AmpcodeConfig | null): boolean => {
+  if (!ampcode) return false;
+  if (String(ampcode.upstreamUrl ?? '').trim()) return true;
+  if (String(ampcode.upstreamApiKey ?? '').trim()) return true;
+  if (Array.isArray(ampcode.upstreamApiKeys) && ampcode.upstreamApiKeys.length > 0) return true;
+  if (Array.isArray(ampcode.modelMappings) && ampcode.modelMappings.length > 0) return true;
+  return ampcode.forceModelMappings === true;
+};
