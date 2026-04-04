@@ -1531,7 +1531,7 @@ export function AuthFilesPage() {
               </div>
             )}
 
-            {!loading && sorted.length > pageSize && (
+            {!loading && (compactMode || sorted.length > pageSize) && (
               <div className={styles.pagination}>
                 <Button
                   variant="secondary"

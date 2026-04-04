@@ -31,6 +31,7 @@ import type {
 } from '@/types';
 import { apiCallApi, authFilesApi, getApiCallErrorMessage } from '@/services/api';
 import { useQuotaStore } from '@/stores';
+import { QUOTA_REQUEST_TIMEOUT_MS } from '@/utils/constants';
 import {
   ANTIGRAVITY_QUOTA_URLS,
   ANTIGRAVITY_REQUEST_HEADERS,
@@ -86,6 +87,7 @@ type QuotaType = 'antigravity' | 'claude' | 'codex' | 'gemini-cli' | 'kimi';
 const DEFAULT_ANTIGRAVITY_PROJECT_ID = 'bamboo-precept-lgxtn';
 const QUOTA_PROGRESS_HIGH_THRESHOLD = 70;
 const QUOTA_PROGRESS_MEDIUM_THRESHOLD = 30;
+const QUOTA_REQUEST_CONFIG = { timeout: QUOTA_REQUEST_TIMEOUT_MS };
 const geminiCliSupplementaryRequestIds = new Map<string, number>();
 const geminiCliSupplementaryCache = new Map<
   string,
@@ -126,7 +128,7 @@ export interface QuotaConfig<TState, TData> {
 
 const resolveAntigravityProjectId = async (file: AuthFileItem): Promise<string> => {
   try {
-    const text = await authFilesApi.downloadText(file.name);
+    const text = await authFilesApi.downloadText(file.name, QUOTA_REQUEST_CONFIG);
     const trimmed = text.trim();
     if (!trimmed) return DEFAULT_ANTIGRAVITY_PROJECT_ID;
 
@@ -182,7 +184,7 @@ const fetchAntigravityQuota = async (
         url,
         header: { ...ANTIGRAVITY_REQUEST_HEADERS },
         data: requestBody,
-      });
+      }, QUOTA_REQUEST_CONFIG);
 
       if (result.statusCode < 200 || result.statusCode >= 300) {
         lastError = getApiCallErrorMessage(result);
@@ -424,7 +426,7 @@ const fetchCodexQuota = async (
     method: 'GET',
     url: CODEX_USAGE_URL,
     header: requestHeader,
-  });
+  }, QUOTA_REQUEST_CONFIG);
 
   if (result.statusCode < 200 || result.statusCode >= 300) {
     throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
@@ -524,7 +526,7 @@ const fetchGeminiCliCodeAssist = async (
           duetProject: projectId,
         },
       }),
-    });
+    }, QUOTA_REQUEST_CONFIG);
 
     if (result.statusCode < 200 || result.statusCode >= 300) {
       return { tierLabel: null, tierId: null, creditBalance: null };
@@ -632,7 +634,7 @@ const fetchGeminiCliQuota = async (
     url: GEMINI_CLI_QUOTA_URL,
     header: { ...GEMINI_CLI_REQUEST_HEADERS },
     data: JSON.stringify({ project: projectId }),
-  });
+  }, QUOTA_REQUEST_CONFIG);
   if (quotaResponse.statusCode < 200 || quotaResponse.statusCode >= 300) {
     throw createStatusError(getApiCallErrorMessage(quotaResponse), quotaResponse.statusCode);
   }
@@ -991,13 +993,13 @@ const fetchClaudeQuota = async (
       method: 'GET',
       url: CLAUDE_USAGE_URL,
       header: { ...CLAUDE_REQUEST_HEADERS },
-    }),
+    }, QUOTA_REQUEST_CONFIG),
     apiCallApi.request({
       authIndex,
       method: 'GET',
       url: CLAUDE_PROFILE_URL,
       header: { ...CLAUDE_REQUEST_HEADERS },
-    }),
+    }, QUOTA_REQUEST_CONFIG),
   ]);
 
   if (usageResult.status === 'rejected') {
@@ -1250,7 +1252,7 @@ const fetchKimiQuota = async (
     method: 'GET',
     url: KIMI_USAGE_URL,
     header: { ...KIMI_REQUEST_HEADERS },
-  });
+  }, QUOTA_REQUEST_CONFIG);
 
   if (result.statusCode < 200 || result.statusCode >= 300) {
     throw createStatusError(getApiCallErrorMessage(result), result.statusCode);

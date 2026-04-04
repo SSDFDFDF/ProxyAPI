@@ -1,6 +1,8 @@
 import type { TFunction } from 'i18next';
 import { useQuotaStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
+import { QUOTA_REFRESH_CONCURRENCY } from '@/utils/constants';
+import { mapWithConcurrencyLimit } from '@/utils/async';
 import { getStatusFromError } from '@/utils/quota';
 import {
   ANTIGRAVITY_CONFIG,
@@ -54,8 +56,10 @@ async function refreshQuotaGroup(
     return nextState;
   });
 
-  const results = await Promise.all(
-    files.map(async (file): Promise<QuotaRefreshResult> => {
+  const results = await mapWithConcurrencyLimit(
+    files,
+    QUOTA_REFRESH_CONCURRENCY,
+    async (file): Promise<QuotaRefreshResult> => {
       try {
         const data = await config.fetchQuota(file, t);
         setQuota((prev: Record<string, unknown>) => ({
@@ -78,7 +82,7 @@ async function refreshQuotaGroup(
           errorStatus,
         };
       }
-    })
+    }
   );
 
   return results;

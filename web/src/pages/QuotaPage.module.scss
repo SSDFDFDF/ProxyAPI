@@ -1,5 +1,6 @@
 @use '../styles/variables' as *;
 @use '../styles/mixins' as *;
+@use '../styles/filterTabs' as filterTabs;
 
 .container {
   display: flex;
@@ -51,74 +52,40 @@
 
 // 选项卡 / 筛选区域
 .filterSection {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-md;
+  @include filterTabs.section;
 }
 
 .filterRail {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-
-  @include mobile {
-    padding: 10px;
-  }
+  @include filterTabs.rail;
 }
 
 .filterTags {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 8px;
+  @include filterTabs.tags;
 }
 
 .filterTag {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 16px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.2;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all $transition-fast;
-
-  &:hover {
-    border-color: color-mix(in srgb, var(--primary-color) 30%, var(--border-hover));
-    background: color-mix(in srgb, var(--primary-color) 6%, var(--bg-secondary));
-    color: var(--primary-color);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 12%, transparent);
-  }
-
-  &:active {
-    transform: translateY(0) scale(0.97);
-    box-shadow: 0 0px 0px transparent;
-    transition-duration: 0.1s;
-  }
+  @include filterTabs.tag;
 }
 
 .filterTagActive {
-  border-color: color-mix(in srgb, var(--primary-color) 40%, var(--border-color));
-  background: color-mix(in srgb, var(--primary-color) 12%, var(--bg-secondary));
-  color: var(--primary-color);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 8%, transparent);
+  @include filterTabs.tag-active;
+}
 
-  &:hover {
-    border-color: color-mix(in srgb, var(--primary-color) 50%, var(--border-color));
-    background: color-mix(in srgb, var(--primary-color) 16%, var(--bg-secondary));
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 16%, transparent);
-  }
+.filterTagLabel {
+  @include filterTabs.tag-label;
+}
+
+.filterTagText {
+  @include filterTabs.tag-text;
+}
+
+.filterTagCount {
+  @include filterTabs.tag-count;
+}
+
+.filterTagActive .filterTagCount {
+  background: color-mix(in srgb, var(--filter-color, var(--primary-color)) 15%, transparent);
+  color: var(--filter-color, var(--primary-color));
 }
 
 .titleWrapper {

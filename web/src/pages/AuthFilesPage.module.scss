@@ -1,5 +1,6 @@
 @use '../styles/variables' as *;
 @use '../styles/mixins' as *;
+@use '../styles/filterTabs' as filterTabs;
 
 .container {
   display: flex;
@@ -80,24 +81,12 @@
 
 // 筛选区域
 .filterSection {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-md;
+  @include filterTabs.section;
   margin-bottom: $spacing-lg;
 }
 
 .filterRail {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-
-  @include mobile {
-    padding: 10px;
-  }
+  @include filterTabs.rail;
 }
 
 .filterAllIcon {
@@ -114,94 +103,23 @@
 }
 
 .filterTags {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 8px;
+  @include filterTabs.tags;
 }
 
 .filterTag {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px 7px 8px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.2;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    border-color $transition-fast,
-    background-color $transition-fast,
-    color $transition-fast,
-    transform $transition-fast,
-    box-shadow $transition-fast;
-
-  &:hover {
-    border-color: color-mix(in srgb, var(--filter-color) 30%, var(--border-hover));
-    background: color-mix(in srgb, var(--filter-color) 6%, var(--bg-secondary));
-    color: var(--filter-color);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--filter-color) 12%, transparent);
-
-    .filterTagIconWrap {
-      border-color: color-mix(in srgb, var(--filter-color) 30%, var(--border-color));
-      background: color-mix(in srgb, var(--filter-surface) 50%, var(--bg-secondary));
-    }
-    
-    .filterTagCount {
-      background: color-mix(in srgb, var(--filter-color) 12%, transparent);
-      color: var(--filter-color);
-    }
-  }
-
-  &:active {
-    transform: translateY(0) scale(0.97);
-    box-shadow: 0 0px 0px transparent;
-    transition-duration: 0.1s;
-  }
+  @include filterTabs.tag;
 }
 
 .filterTagActive {
-  border-color: color-mix(in srgb, var(--filter-color) 40%, var(--border-color));
-  background: color-mix(in srgb, var(--filter-color) 12%, var(--bg-secondary));
-  color: var(--filter-color);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--filter-color) 8%, transparent);
-
-  &:hover {
-    border-color: color-mix(in srgb, var(--filter-color) 50%, var(--border-color));
-    background: color-mix(in srgb, var(--filter-color) 16%, var(--bg-secondary));
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--filter-color) 16%, transparent);
-  }
-
-  .filterTagIconWrap {
-    border-color: color-mix(in srgb, var(--filter-color) 40%, var(--border-color));
-    background: var(--filter-surface);
-  }
+  @include filterTabs.tag-active;
 }
 
 .filterTagLabel {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
+  @include filterTabs.tag-label;
 }
 
 .filterTagIconWrap {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  transition: all $transition-fast;
+  @include filterTabs.tag-icon-wrap;
 }
 
 .filterTagIcon {
@@ -219,27 +137,11 @@
 }
 
 .filterTagText {
-  min-width: 0;
-  color: inherit;
-  @include text-ellipsis;
+  @include filterTabs.tag-text;
 }
 
 .filterTagCount {
-  display: inline-grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 6px;
-  background: var(--bg-secondary);
-  color: var(--text-tertiary);
-  font-size: 11px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  flex: 0 0 auto;
-  line-height: 1;
-  text-align: center;
-  transition: all $transition-fast;
+  @include filterTabs.tag-count;
 }
 
 .filterTagActive .filterTagCount {

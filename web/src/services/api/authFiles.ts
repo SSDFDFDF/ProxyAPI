@@ -2,6 +2,7 @@
  * 认证文件与 OAuth 排除模型相关 API
  */
 
+import type { AxiosRequestConfig } from 'axios';
 import { apiClient } from './client';
 import type { AuthFilesResponse } from '@/types/authFile';
 import type { OAuthModelAliasEntry } from '@/types';
@@ -439,9 +440,10 @@ export const authFilesApi = {
 
   deleteAll: () => apiClient.delete('/auth-files', { params: { all: true } }),
 
-  downloadText: async (name: string): Promise<string> => {
+  downloadText: async (name: string, config?: AxiosRequestConfig): Promise<string> => {
     const response = await apiClient.getRaw(`/auth-files/download?name=${encodeURIComponent(name)}`, {
-      responseType: 'blob'
+      responseType: 'blob',
+      ...config,
     });
     const blob = response.data as Blob;
     return blob.text();

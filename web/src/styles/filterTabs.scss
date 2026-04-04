@@ -1,0 +1,183 @@
+@use './variables.scss' as *;
+@use './mixins.scss' as *;
+
+@mixin section {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+@mixin rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+
+  @include mobile {
+    padding: 10px;
+  }
+}
+
+@mixin tags {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@mixin tag($padding: 7px 12px 7px 8px, $font-size: 13px) {
+  --filter-color: var(--primary-color);
+  --filter-surface: color-mix(
+    in srgb,
+    var(--filter-color, var(--primary-color)) 14%,
+    var(--bg-secondary)
+  );
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: $padding;
+  border-radius: 10px;
+  font-size: $font-size;
+  font-weight: 600;
+  line-height: 1.2;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    border-color $transition-fast,
+    background-color $transition-fast,
+    color $transition-fast,
+    transform $transition-fast,
+    box-shadow $transition-fast;
+
+  &:hover {
+    border-color: color-mix(
+      in srgb,
+      var(--filter-color, var(--primary-color)) 30%,
+      var(--border-hover)
+    );
+    background: color-mix(
+      in srgb,
+      var(--filter-color, var(--primary-color)) 6%,
+      var(--bg-secondary)
+    );
+    color: var(--filter-color, var(--primary-color));
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px
+      color-mix(in srgb, var(--filter-color, var(--primary-color)) 12%, transparent);
+
+    .filterTagIconWrap {
+      border-color: color-mix(
+        in srgb,
+        var(--filter-color, var(--primary-color)) 30%,
+        var(--border-color)
+      );
+      background: color-mix(in srgb, var(--filter-surface, var(--bg-secondary)) 50%, var(--bg-secondary));
+    }
+
+    .filterTagCount {
+      background: color-mix(
+        in srgb,
+        var(--filter-color, var(--primary-color)) 12%,
+        transparent
+      );
+      color: var(--filter-color, var(--primary-color));
+    }
+  }
+
+  &:active {
+    transform: translateY(0) scale(0.97);
+    box-shadow: 0 0 0 transparent;
+    transition-duration: 0.1s;
+  }
+}
+
+@mixin tag-active {
+  border-color: color-mix(
+    in srgb,
+    var(--filter-color, var(--primary-color)) 40%,
+    var(--border-color)
+  );
+  background: color-mix(
+    in srgb,
+    var(--filter-color, var(--primary-color)) 12%,
+    var(--bg-secondary)
+  );
+  color: var(--filter-color, var(--primary-color));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--filter-color, var(--primary-color)) 8%, transparent);
+
+  &:hover {
+    border-color: color-mix(
+      in srgb,
+      var(--filter-color, var(--primary-color)) 50%,
+      var(--border-color)
+    );
+    background: color-mix(
+      in srgb,
+      var(--filter-color, var(--primary-color)) 16%,
+      var(--bg-secondary)
+    );
+    box-shadow: 0 4px 12px
+      color-mix(in srgb, var(--filter-color, var(--primary-color)) 16%, transparent);
+  }
+
+  .filterTagIconWrap {
+    border-color: color-mix(
+      in srgb,
+      var(--filter-color, var(--primary-color)) 40%,
+      var(--border-color)
+    );
+    background: var(--filter-surface, var(--bg-secondary));
+  }
+}
+
+@mixin tag-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+@mixin tag-icon-wrap {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  transition: all $transition-fast;
+}
+
+@mixin tag-text {
+  min-width: 0;
+  color: inherit;
+  @include text-ellipsis;
+}
+
+@mixin tag-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  line-height: 1;
+  text-align: center;
+  transition: all $transition-fast;
+}

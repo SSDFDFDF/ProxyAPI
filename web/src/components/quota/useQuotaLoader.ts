@@ -6,6 +6,8 @@ import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AuthFileItem } from '@/types';
 import { useQuotaStore } from '@/stores';
+import { QUOTA_REFRESH_CONCURRENCY } from '@/utils/constants';
+import { mapWithConcurrencyLimit } from '@/utils/async';
 import { getStatusFromError } from '@/utils/quota';
 import type { QuotaConfig } from './quotaConfigs';
 
@@ -55,8 +57,10 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
           return nextState;
         });
 
-        const results = await Promise.all(
-          targets.map(async (file): Promise<LoadQuotaResult<TData>> => {
+        const results = await mapWithConcurrencyLimit(
+          targets,
+          QUOTA_REFRESH_CONCURRENCY,
+          async (file): Promise<LoadQuotaResult<TData>> => {
             try {
               const data = await config.fetchQuota(file, t);
               return { name: file.name, status: 'success', data };
@@ -65,7 +69,7 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
               const errorStatus = getStatusFromError(err);
               return { name: file.name, status: 'error', error: message, errorStatus };
             }
-          })
+          }
         );
 
         if (requestId !== requestIdRef.current) return;

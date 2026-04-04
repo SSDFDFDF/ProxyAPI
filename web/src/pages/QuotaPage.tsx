@@ -2,7 +2,7 @@
  * Quota management page - coordinates the three quota sections.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useAuthStore } from '@/stores';
@@ -35,7 +35,16 @@ export function QuotaPage() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('claude');
 
-  const activeConfig = QUOTA_TABS.find((t) => t.id === activeTab)?.config;
+  const quotaTabs = useMemo(
+    () =>
+      QUOTA_TABS.map((tab) => ({
+        ...tab,
+        count: files.filter((file) => tab.config.filterFn(file)).length,
+      })),
+    [files]
+  );
+
+  const activeConfig = quotaTabs.find((tab) => tab.id === activeTab)?.config;
 
   const disableControls = connectionStatus !== 'connected';
 
@@ -85,13 +94,16 @@ export function QuotaPage() {
       <div className={styles.filterSection}>
         <div className={styles.filterRail}>
           <div className={styles.filterTags}>
-            {QUOTA_TABS.map((tab) => (
+            {quotaTabs.map((tab) => (
               <button
                 key={tab.id}
                 className={[styles.filterTag, activeTab === tab.id ? styles.filterTagActive : ''].filter(Boolean).join(' ')}
                 onClick={() => setActiveTab(tab.id)}
               >
-                {tab.label}
+                <span className={styles.filterTagLabel}>
+                  <span className={styles.filterTagText}>{tab.label}</span>
+                </span>
+                <span className={styles.filterTagCount}>{tab.count}</span>
               </button>
             ))}
           </div>
