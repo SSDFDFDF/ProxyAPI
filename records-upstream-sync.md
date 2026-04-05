@@ -6,13 +6,27 @@
 
 ## 当前有效基线
 
-- 当前记录时间：`2026-04-04`
+- 当前记录时间：`2026-04-05`
 - 当前本地分支：`main`
-- 当前本地 HEAD：`7816af6285f6609d8cfa6784ba44e2c0b24f66df`
-- 当前 upstream/main：`754b12694457ae563437c1179fc31ac33ce7d37b`
-- 当前差异计数：`基于同步基线 c10f8ae2e222c7461fdf5500bf8be8e97fee7a9e：本地独立维护 4 提交，上游新增 79 提交；本次已完成补丁式同步并通过 go test ./...`
-- 当前同步基线：`754b12694457ae563437c1179fc31ac33ce7d37b`
-- 下次同步起点：`754b12694457ae563437c1179fc31ac33ce7d37b`
+- 当前本地 HEAD：`e34f2734bd47cc2a1cfa39e9199f512a254e3179`（本次同步结果当前已写入索引，尚未单独提交）
+- 当前 upstream/main：`ada8e2905efb0b9e30494e092f32171830031ac7`
+- 当前差异计数：`基于同步基线 754b12694457ae563437c1179fc31ac33ce7d37b：本地独立维护 4 提交，上游新增 13 提交；本次已完成功能性补丁式同步，排除 README/README_CN/README_JA、assets/poixeai.png 与 .gitignore 等非功能更新，并通过 go test ./...`
+- 当前同步基线：`ada8e2905efb0b9e30494e092f32171830031ac7`
+- 下次同步起点：`ada8e2905efb0b9e30494e092f32171830031ac7`
+
+## 2026-04-05 同步记录
+
+- 状态：`同步完成（未提交）`
+- 本地分支：`main`
+- 同步前本地 HEAD：`e34f2734bd47cc2a1cfa39e9199f512a254e3179`
+- 同步前 upstream/main：`ada8e2905efb0b9e30494e092f32171830031ac7`
+- 差异计数：`按既有记录基线 754b12694457ae563437c1179fc31ac33ce7d37b 统计：本地新增 4 提交，上游新增 13 提交`
+- 同步方式：`未直接 merge unrelated histories；基于 754b12694457ae563437c1179fc31ac33ce7d37b 生成仅含功能代码的 upstream 增量补丁，并使用 git apply --3way --index 同步到当前分支；显式排除 README/README_CN/README_JA、assets/poixeai.png 与 .gitignore 等非功能更新`
+- 合并记录：`纳入 754b12694457ae563437c1179fc31ac33ce7d37b..ada8e2905efb0b9e30494e092f32171830031ac7 范围内的功能性上游更新，覆盖 v6.9.14 至 v6.9.15；重点包含 Vertex import prefix 命名空间与文件名修复、Antigravity 版本缓存与后台刷新、Qwen system message 合并规则增强、以及 management api-call 对 API Key 配置代理的解析补强`
+- 冲突处理：`git apply --check --3way 与 git apply --3way --index 均直接通过，无显式冲突；为兼容当前分支保留的 Qwen 默认 system part 形态，额外将 internal/runtime/executor/qwen_executor.go 的默认注入文本统一为 "You are Qwen Code."，使新增测试与当前实现保持一致`
+- 同步后基线：`ada8e2905efb0b9e30494e092f32171830031ac7`
+- 下次同步起点：`ada8e2905efb0b9e30494e092f32171830031ac7`
+- 备注：`upstream 当前标签为 v6.9.15；本次未纳入 4ba1053 的 README 赞助信息、多语言 README 对应资源文件以及 .gitignore 非功能更新；同步完成后已执行 go test ./... 并通过`
 
 ## 2026-04-04 同步记录
 
