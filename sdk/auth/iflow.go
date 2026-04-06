@@ -40,7 +40,6 @@ func (a *IFlowAuthenticator) Login(ctx context.Context, cfg *config.Config, opts
 	if opts == nil {
 		opts = &LoginOptions{}
 	}
-
 	callbackPort := iflow.CallbackPort
 	if opts.CallbackPort > 0 {
 		callbackPort = opts.CallbackPort

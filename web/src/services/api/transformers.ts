@@ -349,9 +349,6 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
   }
 
   config.debug = normalizeBoolean(raw.debug);
-  const proxyUrl = raw['proxy-url'] ?? raw.proxyUrl;
-  config.proxyUrl =
-    typeof proxyUrl === 'string' ? proxyUrl : proxyUrl === undefined || proxyUrl === null ? undefined : String(proxyUrl);
   const requestRetry = raw['request-retry'] ?? raw.requestRetry;
   if (typeof requestRetry === 'number' && Number.isFinite(requestRetry)) {
     config.requestRetry = requestRetry;

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/proxycfg"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/resin"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/util"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
@@ -52,8 +53,7 @@ func (s *FileTokenStore) SetRuntimeConfig(cfg *config.Config) {
 		s.cfg = nil
 		return
 	}
-	clone := *cfg
-	s.cfg = &clone
+	s.cfg = proxycfg.CloneWithScope(cfg, proxycfg.ScopeAuthFiles)
 }
 
 // Save persists token storage and metadata to the resolved auth file path.
@@ -289,18 +289,27 @@ func (s *FileTokenStore) runtimeConfigSnapshot() *config.Config {
 
 func (s *FileTokenStore) auxHTTPClient(provider string, metadata map[string]any) *http.Client {
 	cfg := s.runtimeConfigSnapshot()
+	explicitProxyURL := authFileMetadataProxyURL(metadata)
 	if cfg == nil {
+		if client := util.SetProxyURL(explicitProxyURL, &http.Client{}); client != nil {
+			return client
+		}
 		return http.DefaultClient
 	}
 
+	baseCfg := cfg
+	if explicitProxyURL != "" {
+		baseCfg = proxycfg.CloneWithProxyURL(cfg, explicitProxyURL)
+	}
+
 	account := resin.StableAccount(provider, nil, metadata, "")
-	effectiveCfg, _, err := resin.CloneConfigWithForwardProxy(cfg, resin.Identity{
+	effectiveCfg, _, err := resin.CloneConfigWithForwardProxy(baseCfg, resin.Identity{
 		Provider: provider,
 		Account:  account,
 		Mode:     resin.ModeForward,
 	})
 	if err != nil || effectiveCfg == nil {
-		effectiveCfg = cfg
+		effectiveCfg = baseCfg
 	}
 
 	client := util.SetProxy(&effectiveCfg.SDKConfig, &http.Client{})
@@ -308,6 +317,14 @@ func (s *FileTokenStore) auxHTTPClient(provider string, metadata map[string]any)
 		return http.DefaultClient
 	}
 	return client
+}
+
+func authFileMetadataProxyURL(metadata map[string]any) string {
+	if len(metadata) == 0 {
+		return ""
+	}
+	value, _ := metadata["proxy_url"].(string)
+	return strings.TrimSpace(value)
 }
 
 func (s *FileTokenStore) idFor(path, baseDir string) string {

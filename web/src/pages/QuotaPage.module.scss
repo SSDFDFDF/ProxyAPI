@@ -6,6 +6,14 @@
   gap: $spacing-lg;
 }
 
+.filterSection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  flex-wrap: wrap;
+}
+
 .headerActions {
   display: flex;
   gap: $spacing-sm;
@@ -228,6 +236,10 @@
 }
 
 @include mobile {
+  .filterSection {
+    align-items: stretch;
+  }
+
   .headerActions {
     gap: $spacing-xs;
   }

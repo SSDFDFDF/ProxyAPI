@@ -26,16 +26,6 @@ export const configApi = {
   updateDebug: (enabled: boolean) => apiClient.put('/debug', { value: enabled }),
 
   /**
-   * 更新代理 URL
-   */
-  updateProxyUrl: (proxyUrl: string) => apiClient.put('/proxy-url', { value: proxyUrl }),
-
-  /**
-   * 清除代理 URL
-   */
-  clearProxyUrl: () => apiClient.delete('/proxy-url'),
-
-  /**
    * 更新重试次数
    */
   updateRequestRetry: (retryCount: number) => apiClient.put('/request-retry', { value: retryCount }),

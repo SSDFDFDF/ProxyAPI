@@ -13,7 +13,6 @@ export interface QuotaExceededConfig {
 
 export interface Config {
   debug?: boolean;
-  proxyUrl?: string;
   requestRetry?: number;
   quotaExceeded?: QuotaExceededConfig;
   usageStatisticsEnabled?: boolean;
@@ -36,7 +35,6 @@ export interface Config {
 
 export type RawConfigSection =
   | 'debug'
-  | 'proxy-url'
   | 'request-retry'
   | 'quota-exceeded'
   | 'usage-statistics-enabled'

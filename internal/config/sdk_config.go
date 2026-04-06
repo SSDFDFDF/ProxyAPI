@@ -6,15 +6,20 @@ package config
 
 // SDKConfig represents the application's configuration, loaded from a YAML file.
 type SDKConfig struct {
-	// ProxyURL is the URL of an optional proxy server to use for outbound requests.
-	ProxyURL string `yaml:"proxy-url" json:"proxy-url"`
+	// ProxyURL is a legacy migration input only.
+	// When present in YAML, it is migrated into proxy.profiles on load and omitted on save.
+	ProxyURL string `yaml:"proxy-url,omitempty" json:"-"`
 
-	// ResinURL points to the Resin proxy base including the token path, for example:
-	// http://127.0.0.1:2260/my-token
-	ResinURL string `yaml:"resin-url" json:"resin-url"`
+	// Proxy configures named network profiles plus scope selectors.
+	Proxy ProxyConfig `yaml:"proxy,omitempty" json:"proxy,omitempty"`
 
-	// ResinPlatformName is the Platform segment Resin uses to identify the business namespace.
-	ResinPlatformName string `yaml:"resin-platform-name" json:"resin-platform-name"`
+	// ResinURL is a legacy migration input only.
+	// When present in YAML, it is migrated into proxy.profiles on load and omitted on save.
+	ResinURL string `yaml:"resin-url,omitempty" json:"-"`
+
+	// ResinPlatformName is a legacy migration input only.
+	// When present in YAML, it is migrated into proxy.profiles on load and omitted on save.
+	ResinPlatformName string `yaml:"resin-platform-name,omitempty" json:"-"`
 
 	// EnableGeminiCLIEndpoint controls whether Gemini CLI internal endpoints (/v1internal:*) are enabled.
 	// Default is false for safety; when false, /v1internal:* requests are rejected.
@@ -41,6 +46,45 @@ type SDKConfig struct {
 	// NonStreamKeepAliveInterval controls how often blank lines are emitted for non-streaming responses.
 	// <= 0 disables keep-alives. Value is in seconds.
 	NonStreamKeepAliveInterval int `yaml:"nonstream-keepalive-interval,omitempty" json:"nonstream-keepalive-interval,omitempty"`
+}
+
+// ProxyConfig groups named network profiles plus scope selectors.
+type ProxyConfig struct {
+	// Profiles stores reusable named network configurations.
+	Profiles map[string]ProxyProfile `yaml:"profiles,omitempty" json:"profiles,omitempty"`
+
+	// Default selects the default profile for generic outbound traffic and for scopes
+	// that do not set their own selector. Empty means no default profile is selected.
+	// "direct"/"none" explicitly disables both proxy and Resin defaults.
+	Default string `yaml:"default,omitempty" json:"default,omitempty"`
+
+	// AIProviders selects the profile used by config-backed providers such as
+	// gemini-api-key, claude-api-key, codex-api-key, openai-compatibility, and vertex-api-key.
+	// Empty means "inherit proxy.default".
+	AIProviders string `yaml:"ai-providers,omitempty" json:"ai-providers,omitempty"`
+
+	// AuthFiles selects the profile used by file-backed credentials loaded from auth-dir.
+	// Empty means "inherit proxy.default".
+	AuthFiles string `yaml:"auth-files,omitempty" json:"auth-files,omitempty"`
+
+	// OAuthLogin selects the profile used by interactive OAuth/device login flows.
+	// Empty means "inherit proxy.default".
+	OAuthLogin string `yaml:"oauth-login,omitempty" json:"oauth-login,omitempty"`
+}
+
+// ProxyProfile stores one reusable network profile.
+// A profile may define a plain proxy, a Resin route, or both:
+//   - proxy-url is used for generic/non-account traffic
+//   - resin-url + resin-platform-name are used for account-scoped traffic
+type ProxyProfile struct {
+	// ProxyURL stores the outbound proxy URL for this profile.
+	ProxyURL string `yaml:"proxy-url,omitempty" json:"proxy-url,omitempty"`
+
+	// ResinURL points to the Resin proxy base including the token path.
+	ResinURL string `yaml:"resin-url,omitempty" json:"resin-url,omitempty"`
+
+	// ResinPlatformName is the Resin business namespace segment.
+	ResinPlatformName string `yaml:"resin-platform-name,omitempty" json:"resin-platform-name,omitempty"`
 }
 
 // StreamingConfig holds server streaming behavior configuration.

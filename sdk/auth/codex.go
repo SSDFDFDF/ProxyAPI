@@ -45,7 +45,6 @@ func (a *CodexAuthenticator) Login(ctx context.Context, cfg *config.Config, opts
 	if opts == nil {
 		opts = &LoginOptions{}
 	}
-
 	if shouldUseCodexDeviceFlow(opts) {
 		return a.loginWithDeviceFlow(ctx, cfg, opts)
 	}

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/proxycfg"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/util"
 	sdkconfig "github.com/router-for-me/CLIProxyAPI/v6/sdk/config"
 	log "github.com/sirupsen/logrus"
@@ -100,7 +101,7 @@ func runAutoUpdater(ctx context.Context) {
 
 		configPath, _ := schedulerConfigPath.Load().(string)
 		staticDir := StaticDir(configPath)
-		updateManagementHTMLFromRemote(ctx, staticDir, cfg.ProxyURL, repo)
+		updateManagementHTMLFromRemote(ctx, staticDir, proxycfg.ResolveScopeProxyURL(cfg, proxycfg.ScopeDefault), repo)
 	}
 
 	runOnce()

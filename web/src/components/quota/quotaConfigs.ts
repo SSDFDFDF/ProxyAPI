@@ -71,8 +71,7 @@ import {
   isAntigravityFile,
   isClaudeFile,
   isCodexFile,
-  isDisabledAuthFile,
-  isGeminiCliFile,
+    isGeminiCliFile,
   isKimiFile,
   isRuntimeOnlyAuthFile,
 } from '@/utils/quota';
@@ -112,7 +111,7 @@ export interface QuotaConfig<TState, TData> {
   type: QuotaType;
   i18nPrefix: string;
   cardIdleMessageKey?: string;
-  filterFn: (file: AuthFileItem) => boolean;
+  matchesFile: (file: AuthFileItem) => boolean;
   fetchQuota: (file: AuthFileItem, t: TFunction) => Promise<TData>;
   storeSelector: (state: QuotaStore) => Record<string, TState>;
   storeSetter: keyof QuotaStore;
@@ -1113,7 +1112,7 @@ export const CLAUDE_CONFIG: QuotaConfig<
   type: 'claude',
   i18nPrefix: 'claude_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
-  filterFn: (file) => isClaudeFile(file) && !isDisabledAuthFile(file),
+  matchesFile: (file) => isClaudeFile(file),
   fetchQuota: fetchClaudeQuota,
   storeSelector: (state) => state.claudeQuota,
   storeSetter: 'setClaudeQuota',
@@ -1141,7 +1140,7 @@ export const ANTIGRAVITY_CONFIG: QuotaConfig<AntigravityQuotaState, AntigravityQ
   type: 'antigravity',
   i18nPrefix: 'antigravity_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
-  filterFn: (file) => isAntigravityFile(file) && !isDisabledAuthFile(file),
+  matchesFile: (file) => isAntigravityFile(file),
   fetchQuota: fetchAntigravityQuota,
   storeSelector: (state) => state.antigravityQuota,
   storeSetter: 'setAntigravityQuota',
@@ -1167,7 +1166,7 @@ export const CODEX_CONFIG: QuotaConfig<
   type: 'codex',
   i18nPrefix: 'codex_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
-  filterFn: (file) => isCodexFile(file) && !isDisabledAuthFile(file),
+  matchesFile: (file) => isCodexFile(file),
   fetchQuota: fetchCodexQuota,
   storeSelector: (state) => state.codexQuota,
   storeSetter: 'setCodexQuota',
@@ -1204,8 +1203,7 @@ export const GEMINI_CLI_CONFIG: QuotaConfig<
   type: 'gemini-cli',
   i18nPrefix: 'gemini_cli_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
-  filterFn: (file) =>
-    isGeminiCliFile(file) && !isRuntimeOnlyAuthFile(file) && !isDisabledAuthFile(file),
+  matchesFile: (file) => isGeminiCliFile(file) && !isRuntimeOnlyAuthFile(file),
   fetchQuota: fetchGeminiCliQuota,
   storeSelector: (state) => state.geminiCliQuota,
   storeSetter: 'setGeminiCliQuota',
@@ -1326,7 +1324,7 @@ export const KIMI_CONFIG: QuotaConfig<KimiQuotaState, KimiQuotaRow[]> = {
   type: 'kimi',
   i18nPrefix: 'kimi_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
-  filterFn: (file) => isKimiFile(file) && !isDisabledAuthFile(file),
+  matchesFile: (file) => isKimiFile(file),
   fetchQuota: fetchKimiQuota,
   storeSelector: (state) => state.kimiQuota,
   storeSetter: 'setKimiQuota',

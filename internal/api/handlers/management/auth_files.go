@@ -32,6 +32,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/interfaces"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/misc"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/proxycfg"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/resin"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/util"
@@ -1399,7 +1400,8 @@ func (h *Handler) resinLoginConfig(provider string) (*config.Config, resin.Ident
 		TempAccount: resin.NewTempAccount(provider),
 		Mode:        resin.ModeForward,
 	}
-	effectiveCfg, _, err := resin.CloneConfigWithForwardProxy(h.cfg, identity)
+	baseCfg := proxycfg.CloneWithScope(h.cfg, proxycfg.ScopeOAuthLogin)
+	effectiveCfg, _, err := resin.CloneConfigWithForwardProxy(baseCfg, identity)
 	return effectiveCfg, identity, err
 }
 

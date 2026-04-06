@@ -6,6 +6,7 @@ import { useCallback, type CSSProperties, useEffect, useMemo, useState } from 'r
 import { useTranslation } from 'react-i18next';
 import { PageFilterSection } from '@/components/ui/PageFilterSection';
 import { FilterTabs, type FilterTabItem } from '@/components/ui/FilterTabs';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { PageTitleBlock } from '@/components/ui/PageTitleBlock';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useAuthStore, useThemeStore } from '@/stores';
@@ -24,6 +25,7 @@ import {
   getTypeColor,
   type ResolvedTheme,
 } from '@/features/authFiles/constants';
+import { isDisabledAuthFile } from '@/utils/quota';
 import styles from './QuotaPage.module.scss';
 
 const QUOTA_TABS = [
@@ -34,6 +36,12 @@ const QUOTA_TABS = [
   { id: 'kimi', label: 'Kimi', config: KIMI_CONFIG },
 ];
 
+const shouldIncludeInQuota = (
+  file: AuthFileItem,
+  includeDisabled: boolean,
+  matchFile: (file: AuthFileItem) => boolean
+) => matchFile(file) && (includeDisabled || !isDisabledAuthFile(file));
+
 export function QuotaPage() {
   const { t } = useTranslation();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
@@ -43,14 +51,15 @@ export function QuotaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('claude');
+  const [includeDisabled, setIncludeDisabled] = useState(false);
 
   const quotaTabs = useMemo(
     () =>
       QUOTA_TABS.map((tab) => ({
         ...tab,
-        count: files.filter((file) => tab.config.filterFn(file)).length,
+        count: files.filter((file) => shouldIncludeInQuota(file, includeDisabled, tab.config.matchesFile)).length,
       })),
-    [files]
+    [files, includeDisabled]
   );
   const quotaTabItems = useMemo<FilterTabItem[]>(
     () =>
@@ -130,8 +139,15 @@ export function QuotaPage() {
 
       {error && <div className={styles.errorBox}>{error}</div>}
 
-      <PageFilterSection>
+      <PageFilterSection className={styles.filterSection}>
         <FilterTabs items={quotaTabItems} />
+        <ToggleSwitch
+          checked={includeDisabled}
+          onChange={setIncludeDisabled}
+          label={t('quota_management.include_disabled')}
+          ariaLabel={t('quota_management.include_disabled')}
+          labelPosition="left"
+        />
       </PageFilterSection>
 
       {activeConfig && (
@@ -141,6 +157,7 @@ export function QuotaPage() {
           files={files}
           loading={loading}
           disabled={disableControls}
+          includeDisabled={includeDisabled}
         />
       )}
     </div>

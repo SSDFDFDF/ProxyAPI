@@ -20,8 +20,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/misc"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/runtime/executor/helps"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/proxycfg"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/resin"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/runtime/executor/helps"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/thinking"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/util"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
@@ -646,7 +647,8 @@ func (e *CodexWebsocketsExecutor) dialCodexWebsocket(ctx context.Context, auth *
 }
 
 func routeCodexWebsocketThroughResin(cfg *config.Config, auth *cliproxyauth.Auth, wsURL string, headers http.Header) (string, http.Header, bool) {
-	if auth == nil || cfg == nil {
+	effectiveCfg := proxycfg.CloneWithRuntime(cfg, auth)
+	if auth == nil || effectiveCfg == nil {
 		return wsURL, headers, false
 	}
 
@@ -655,7 +657,7 @@ func routeCodexWebsocketThroughResin(cfg *config.Config, auth *cliproxyauth.Auth
 		return wsURL, headers, false
 	}
 
-	parsedResin, err := resin.ParseConfig(cfg)
+	parsedResin, err := resin.ParseConfig(effectiveCfg)
 	if err != nil || parsedResin == nil {
 		if err != nil {
 			log.Errorf("codex websockets executor: resin routing disabled: %v", err)
@@ -757,12 +759,10 @@ func newProxyAwareWebsocketDialer(cfg *config.Config, auth *cliproxyauth.Auth) *
 		}).DialContext,
 	}
 
+	effectiveCfg := proxycfg.CloneWithRuntime(cfg, auth)
 	proxyURL := ""
-	if auth != nil {
-		proxyURL = strings.TrimSpace(auth.ProxyURL)
-	}
-	if proxyURL == "" && cfg != nil {
-		proxyURL = strings.TrimSpace(cfg.ProxyURL)
+	if effectiveCfg != nil {
+		proxyURL = strings.TrimSpace(effectiveCfg.ProxyURL)
 	}
 	if proxyURL == "" {
 		return dialer

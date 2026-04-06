@@ -43,7 +43,6 @@ func (a KimiAuthenticator) Login(ctx context.Context, cfg *config.Config, opts *
 	if opts == nil {
 		opts = &LoginOptions{}
 	}
-
 	authSvc := kimi.NewKimiAuth(cfg)
 
 	// Start the device flow

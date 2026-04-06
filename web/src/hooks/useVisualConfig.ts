@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { isMap, parse as parseYaml, parseDocument } from 'yaml';
 import type {
+  NetworkProfileEntry,
   PayloadFilterRule,
   PayloadParamEntry,
   PayloadParamValueType,
@@ -66,6 +67,8 @@ function resolveApiKeysText(parsed: Record<string, unknown>): string {
 
 type YamlDocument = ReturnType<typeof parseDocument>;
 type YamlPath = string[];
+
+const MIGRATED_DEFAULT_PROXY_PROFILE_NAME = 'default';
 
 function docHas(doc: YamlDocument, path: YamlPath): boolean {
   return doc.hasIn(path);
@@ -143,12 +146,44 @@ function getPortError(value: string): 'port_range' | undefined {
 export function getVisualConfigValidationErrors(
   values: VisualConfigValues
 ): VisualConfigValidationErrors {
+  const trimmedNames = values.networkProfiles.map((profile) => profile.name.trim());
+  const validNames = new Set(trimmedNames.filter(Boolean));
+  const hasDuplicateProfile = new Set(trimmedNames.filter(Boolean)).size !== trimmedNames.filter(Boolean).length;
+  const hasInvalidProfileName = trimmedNames.some(
+    (name) => !!name && (name.toLowerCase() === 'direct' || name.toLowerCase() === 'none')
+  );
+  const hasIncompleteResinProfile = values.networkProfiles.some((profile) => {
+    const resinUrl = profile.resinUrl.trim();
+    const platform = profile.resinPlatformName.trim();
+    return (!!resinUrl || !!platform) && (!resinUrl || !platform);
+  });
+  const selectorValues = [
+    values.networkDefaultProfile,
+    values.networkAIProvidersProfile,
+    values.networkAuthFilesProfile,
+    values.networkOAuthLoginProfile,
+  ].map((value) => value.trim());
+  const hasMissingSelectorProfile = selectorValues.some(
+    (value) => !!value && value.toLowerCase() !== 'direct' && value.toLowerCase() !== 'none' && !validNames.has(value)
+  );
+
   return {
     port: getPortError(values.port),
     logsMaxTotalSizeMb: getNonNegativeIntegerError(values.logsMaxTotalSizeMb),
     requestRetry: getNonNegativeIntegerError(values.requestRetry),
     maxRetryCredentials: getNonNegativeIntegerError(values.maxRetryCredentials),
     maxRetryInterval: getNonNegativeIntegerError(values.maxRetryInterval),
+    networkProfiles: hasDuplicateProfile
+      ? 'proxy_profile_duplicate'
+      : hasInvalidProfileName
+        ? 'proxy_profile_invalid_name'
+        : hasIncompleteResinProfile
+          ? 'proxy_resin_incomplete'
+          : undefined,
+    networkDefaultProfile: hasMissingSelectorProfile ? 'proxy_profile_selector_missing' : undefined,
+    networkAIProvidersProfile: hasMissingSelectorProfile ? 'proxy_profile_selector_missing' : undefined,
+    networkAuthFilesProfile: hasMissingSelectorProfile ? 'proxy_profile_selector_missing' : undefined,
+    networkOAuthLoginProfile: hasMissingSelectorProfile ? 'proxy_profile_selector_missing' : undefined,
     'streaming.keepaliveSeconds': getNonNegativeIntegerError(values.streaming.keepaliveSeconds),
     'streaming.bootstrapRetries': getNonNegativeIntegerError(values.streaming.bootstrapRetries),
     'streaming.nonstreamKeepaliveInterval': getNonNegativeIntegerError(
@@ -232,6 +267,131 @@ function parseRawPayloadParamValue(raw: unknown): string {
 function parsePayloadProtocol(raw: unknown): string | undefined {
   if (typeof raw !== 'string') return undefined;
   return raw.trim() ? raw : undefined;
+}
+
+function normalizeNetworkProfileEntry(
+  name: string,
+  raw: unknown,
+  index: number
+): NetworkProfileEntry | null {
+  const trimmedName = name.trim();
+  if (!trimmedName) return null;
+
+  const record = asRecord(raw) ?? {};
+  const proxyUrl = typeof record['proxy-url'] === 'string' ? record['proxy-url'].trim() : '';
+  let resinUrl = typeof record['resin-url'] === 'string' ? record['resin-url'].trim() : '';
+  let resinPlatformName =
+    typeof record['resin-platform-name'] === 'string' ? record['resin-platform-name'].trim() : '';
+
+  if (proxyUrl.toLowerCase() === 'direct' || proxyUrl.toLowerCase() === 'none') {
+    resinUrl = '';
+    resinPlatformName = '';
+  }
+  if (!proxyUrl && !resinUrl && !resinPlatformName) return null;
+
+  return {
+    id: `network-profile-${index}`,
+    name: trimmedName,
+    proxyUrl,
+    resinUrl,
+    resinPlatformName,
+  };
+}
+
+function parseNetworkProfiles(raw: unknown): NetworkProfileEntry[] {
+  const profilesRecord = asRecord(raw);
+  if (!profilesRecord) return [];
+
+  return Object.entries(profilesRecord)
+    .map(([name, value], index) => normalizeNetworkProfileEntry(name, value, index))
+    .filter((profile): profile is NetworkProfileEntry => profile !== null);
+}
+
+function parseLegacyNetworkProfile(
+  parsed: Record<string, unknown>,
+  index: number
+): NetworkProfileEntry | null {
+  return normalizeNetworkProfileEntry(
+    MIGRATED_DEFAULT_PROXY_PROFILE_NAME,
+    {
+      'proxy-url': parsed['proxy-url'],
+      'resin-url': parsed['resin-url'],
+      'resin-platform-name': parsed['resin-platform-name'],
+    },
+    index
+  );
+}
+
+function parseNetworkSelectors(proxy: Record<string, unknown> | null): {
+  networkDefaultProfile: string;
+  networkAIProvidersProfile: string;
+  networkAuthFilesProfile: string;
+  networkOAuthLoginProfile: string;
+} {
+  return {
+    networkDefaultProfile: typeof proxy?.default === 'string' ? proxy.default.trim() : '',
+    networkAIProvidersProfile:
+      typeof proxy?.['ai-providers'] === 'string' ? proxy['ai-providers'].trim() : '',
+    networkAuthFilesProfile:
+      typeof proxy?.['auth-files'] === 'string' ? proxy['auth-files'].trim() : '',
+    networkOAuthLoginProfile:
+      typeof proxy?.['oauth-login'] === 'string' ? proxy['oauth-login'].trim() : '',
+  };
+}
+
+function resolveNetworkVisualState(parsed: Record<string, unknown>): {
+  networkProfiles: NetworkProfileEntry[];
+  networkDefaultProfile: string;
+  networkAIProvidersProfile: string;
+  networkAuthFilesProfile: string;
+  networkOAuthLoginProfile: string;
+} {
+  const proxy = asRecord(parsed.proxy);
+  const networkProfiles = parseNetworkProfiles(proxy?.profiles);
+  const selectors = parseNetworkSelectors(proxy);
+  const profileNames = new Set(networkProfiles.map((profile) => profile.name));
+  const legacyProfile = parseLegacyNetworkProfile(parsed, networkProfiles.length);
+
+  if (legacyProfile && !profileNames.has(MIGRATED_DEFAULT_PROXY_PROFILE_NAME)) {
+    networkProfiles.push(legacyProfile);
+    profileNames.add(legacyProfile.name);
+  }
+
+  if (
+    !selectors.networkDefaultProfile &&
+    profileNames.has(MIGRATED_DEFAULT_PROXY_PROFILE_NAME)
+  ) {
+    selectors.networkDefaultProfile = MIGRATED_DEFAULT_PROXY_PROFILE_NAME;
+  }
+
+  return {
+    networkProfiles,
+    networkDefaultProfile: selectors.networkDefaultProfile,
+    networkAIProvidersProfile: selectors.networkAIProvidersProfile,
+    networkAuthFilesProfile: selectors.networkAuthFilesProfile,
+    networkOAuthLoginProfile: selectors.networkOAuthLoginProfile,
+  };
+}
+
+function serializeNetworkProfilesForYaml(
+  profiles: NetworkProfileEntry[]
+): Record<string, Record<string, string>> {
+  return profiles.reduce<Record<string, Record<string, string>>>((acc, profile) => {
+    const name = profile.name.trim();
+    if (!name) return acc;
+
+    const proxyUrl = profile.proxyUrl.trim();
+    const resinUrl = profile.resinUrl.trim();
+    const resinPlatformName = profile.resinPlatformName.trim();
+    if (!proxyUrl && !resinUrl && !resinPlatformName) return acc;
+
+    const next: Record<string, string> = {};
+    if (proxyUrl) next['proxy-url'] = proxyUrl;
+    if (resinUrl) next['resin-url'] = resinUrl;
+    if (resinPlatformName) next['resin-platform-name'] = resinPlatformName;
+    acc[name] = next;
+    return acc;
+  }, {});
 }
 
 function deleteLegacyApiKeysProvider(doc: YamlDocument): void {
@@ -472,6 +632,7 @@ export function useVisualConfig() {
       const routing = asRecord(parsed.routing);
       const payload = asRecord(parsed.payload);
       const streaming = asRecord(parsed.streaming);
+      const networkState = resolveNetworkVisualState(parsed);
 
       const newValues: VisualConfigValues = {
         host: typeof parsed.host === 'string' ? parsed.host : '',
@@ -501,9 +662,11 @@ export function useVisualConfig() {
         logsMaxTotalSizeMb: String(parsed['logs-max-total-size-mb'] ?? ''),
         usageStatisticsEnabled: Boolean(parsed['usage-statistics-enabled']),
 
-        proxyUrl: typeof parsed['proxy-url'] === 'string' ? parsed['proxy-url'] : '',
-        resinUrl: typeof parsed['resin-url'] === 'string' ? parsed['resin-url'] : '',
-        resinPlatformName: typeof parsed['resin-platform-name'] === 'string' ? parsed['resin-platform-name'] : '',
+        networkProfiles: networkState.networkProfiles,
+        networkDefaultProfile: networkState.networkDefaultProfile,
+        networkAIProvidersProfile: networkState.networkAIProvidersProfile,
+        networkAuthFilesProfile: networkState.networkAuthFilesProfile,
+        networkOAuthLoginProfile: networkState.networkOAuthLoginProfile,
         forceModelPrefix: Boolean(parsed['force-model-prefix']),
         requestRetry: String(parsed['request-retry'] ?? ''),
         maxRetryCredentials: String(parsed['max-retry-credentials'] ?? ''),
@@ -628,9 +791,34 @@ export function useVisualConfig() {
         setIntFromStringInDoc(doc, ['logs-max-total-size-mb'], values.logsMaxTotalSizeMb);
         setBooleanInDoc(doc, ['usage-statistics-enabled'], values.usageStatisticsEnabled);
 
-        setStringInDoc(doc, ['proxy-url'], values.proxyUrl);
-        setStringInDoc(doc, ['resin-url'], values.resinUrl);
-        setStringInDoc(doc, ['resin-platform-name'], values.resinPlatformName);
+        if (docHas(doc, ['proxy-url'])) doc.deleteIn(['proxy-url']);
+        if (docHas(doc, ['resin-url'])) doc.deleteIn(['resin-url']);
+        if (docHas(doc, ['resin-platform-name'])) doc.deleteIn(['resin-platform-name']);
+
+        const serializedProfiles = serializeNetworkProfilesForYaml(values.networkProfiles);
+        const hasProxyConfig =
+          docHas(doc, ['proxy']) ||
+          values.networkDefaultProfile.trim() ||
+          values.networkAIProvidersProfile.trim() ||
+          values.networkAuthFilesProfile.trim() ||
+          values.networkOAuthLoginProfile.trim() ||
+          Object.keys(serializedProfiles).length > 0;
+        if (hasProxyConfig) {
+          ensureMapInDoc(doc, ['proxy']);
+          setStringInDoc(doc, ['proxy', 'default'], values.networkDefaultProfile);
+          setStringInDoc(doc, ['proxy', 'ai-providers'], values.networkAIProvidersProfile);
+          setStringInDoc(doc, ['proxy', 'auth-files'], values.networkAuthFilesProfile);
+          setStringInDoc(doc, ['proxy', 'oauth-login'], values.networkOAuthLoginProfile);
+
+          if (Object.keys(serializedProfiles).length > 0) {
+            doc.setIn(['proxy', 'profiles'], serializedProfiles);
+          } else if (docHas(doc, ['proxy', 'profiles'])) {
+            doc.deleteIn(['proxy', 'profiles']);
+          }
+
+          deleteIfMapEmpty(doc, ['proxy']);
+        }
+
         setBooleanInDoc(doc, ['force-model-prefix'], values.forceModelPrefix);
         setIntFromStringInDoc(doc, ['request-retry'], values.requestRetry);
         setIntFromStringInDoc(doc, ['max-retry-credentials'], values.maxRetryCredentials);

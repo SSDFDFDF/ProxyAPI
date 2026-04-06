@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { Button } from '@/components/ui/Button';
 import {
   IconCode,
   IconDiamond,
@@ -18,6 +19,7 @@ import {
   IconSettings,
   IconShield,
   IconTimer,
+  IconTrash2,
   IconTrendingUp,
   type IconProps,
 } from '@/components/ui/icons';
@@ -31,6 +33,7 @@ import type {
   VisualConfigValidationErrors,
   VisualConfigValues,
 } from '@/types/visualConfig';
+import { makeClientId } from '@/types/visualConfig';
 import {
   ApiKeysCardEditor,
   PayloadFilterRulesEditor,
@@ -194,6 +197,11 @@ export function VisualConfigEditor({
   const requestRetryError = getValidationMessage(t, validationErrors?.requestRetry);
   const maxRetryCredentialsError = getValidationMessage(t, validationErrors?.maxRetryCredentials);
   const maxRetryIntervalError = getValidationMessage(t, validationErrors?.maxRetryInterval);
+  const networkProfilesError = getValidationMessage(t, validationErrors?.networkProfiles);
+  const networkDefaultProfileError = getValidationMessage(t, validationErrors?.networkDefaultProfile);
+  const networkAIProvidersProfileError = getValidationMessage(t, validationErrors?.networkAIProvidersProfile);
+  const networkAuthFilesProfileError = getValidationMessage(t, validationErrors?.networkAuthFilesProfile);
+  const networkOAuthLoginProfileError = getValidationMessage(t, validationErrors?.networkOAuthLoginProfile);
   const keepaliveError = getValidationMessage(t, validationErrors?.['streaming.keepaliveSeconds']);
   const bootstrapRetriesError = getValidationMessage(
     t,
@@ -227,6 +235,41 @@ export function VisualConfigEditor({
   const handlePayloadFilterRulesChange = useCallback(
     (payloadFilterRules: PayloadFilterRule[]) => onChange({ payloadFilterRules }),
     [onChange]
+  );
+  const handleAddNetworkProfile = useCallback(() => {
+    onChange({
+      networkProfiles: [
+        ...values.networkProfiles,
+        {
+          id: makeClientId(),
+          name: '',
+          proxyUrl: '',
+          resinUrl: '',
+          resinPlatformName: '',
+        },
+      ],
+    });
+  }, [onChange, values.networkProfiles]);
+  const handleUpdateNetworkProfile = useCallback(
+    (
+      profileId: string,
+      patch: Partial<VisualConfigValues['networkProfiles'][number]>
+    ) => {
+      onChange({
+        networkProfiles: values.networkProfiles.map((profile) =>
+          profile.id === profileId ? { ...profile, ...patch } : profile
+        ),
+      });
+    },
+    [onChange, values.networkProfiles]
+  );
+  const handleRemoveNetworkProfile = useCallback(
+    (profileId: string) => {
+      onChange({
+        networkProfiles: values.networkProfiles.filter((profile) => profile.id !== profileId),
+      });
+    },
+    [onChange, values.networkProfiles]
   );
 
   const countErrors = useCallback(
@@ -300,6 +343,33 @@ export function VisualConfigEditor({
     ],
     [countErrors, hasPayloadValidationErrors, t]
   );
+
+  const networkProfileOptions = useMemo(() => {
+    const names = Array.from(
+      new Set(
+        values.networkProfiles
+          .map((profile) => profile.name.trim())
+          .filter(Boolean)
+      )
+    );
+    return [
+      {
+        value: '',
+        label: t(
+          'config_management.visual.sections.network.profile_selector_inherit',
+          { defaultValue: 'Inherit Default' }
+        ),
+      },
+      {
+        value: 'direct',
+        label: t(
+          'config_management.visual.sections.network.profile_selector_direct',
+          { defaultValue: 'Direct / Disable All' }
+        ),
+      },
+      ...names.map((name) => ({ value: name, label: name })),
+    ];
+  }, [t, values.networkProfiles]);
 
   const handleSectionJump = useCallback((sectionId: VisualSectionId) => {
     setActiveSectionId(sectionId);
@@ -543,31 +613,220 @@ export function VisualConfigEditor({
             description={t('config_management.visual.sections.network.description')}
           >
             <SectionStack>
+              <SectionSubsection
+                title={t('config_management.visual.sections.network.profile_selectors_title', {
+                  defaultValue: 'Profile Selectors',
+                })}
+                description={t('config_management.visual.sections.network.profile_selectors_desc', {
+                  defaultValue:
+                    'Choose which network profile each traffic scope should use. Empty means inherit proxy.default.',
+                })}
+              >
+                <SectionGrid>
+                  <FieldShell
+                    label={t('config_management.visual.sections.network.default_profile', {
+                      defaultValue: 'Default Profile',
+                    })}
+                    hint={t('config_management.visual.sections.network.default_profile_hint', {
+                      defaultValue:
+                        'Fallback profile for generic traffic and scopes without an explicit selector.',
+                    })}
+                  >
+                    <Select
+                      value={values.networkDefaultProfile}
+                      options={networkProfileOptions}
+                      disabled={disabled}
+                      ariaDescribedBy={networkDefaultProfileError ? `${routingStrategyLabelId}-default-profile-error` : undefined}
+                      onChange={(networkDefaultProfile) => onChange({ networkDefaultProfile })}
+                    />
+                    {networkDefaultProfileError ? (
+                      <div id={`${routingStrategyLabelId}-default-profile-error`} className={styles.fieldError}>
+                        {networkDefaultProfileError}
+                      </div>
+                    ) : null}
+                  </FieldShell>
+                  <FieldShell
+                    label={t('config_management.visual.sections.network.ai_providers_profile', {
+                      defaultValue: 'AI Providers Profile',
+                    })}
+                    hint={t('config_management.visual.sections.network.ai_providers_profile_hint', {
+                      defaultValue:
+                        'Used by config-backed providers such as gemini-api-key, claude-api-key, codex-api-key, openai-compatibility, and vertex-api-key.',
+                    })}
+                  >
+                    <Select
+                      value={values.networkAIProvidersProfile}
+                      options={networkProfileOptions}
+                      disabled={disabled}
+                      ariaDescribedBy={networkAIProvidersProfileError ? `${routingStrategyLabelId}-ai-profile-error` : undefined}
+                      onChange={(networkAIProvidersProfile) => onChange({ networkAIProvidersProfile })}
+                    />
+                    {networkAIProvidersProfileError ? (
+                      <div id={`${routingStrategyLabelId}-ai-profile-error`} className={styles.fieldError}>
+                        {networkAIProvidersProfileError}
+                      </div>
+                    ) : null}
+                  </FieldShell>
+                  <FieldShell
+                    label={t('config_management.visual.sections.network.auth_files_profile', {
+                      defaultValue: 'Auth Files Profile',
+                    })}
+                    hint={t('config_management.visual.sections.network.auth_files_profile_hint', {
+                      defaultValue:
+                        'Used by file-backed credentials in auth-dir when the auth file itself does not set proxy_url.',
+                    })}
+                  >
+                    <Select
+                      value={values.networkAuthFilesProfile}
+                      options={networkProfileOptions}
+                      disabled={disabled}
+                      ariaDescribedBy={networkAuthFilesProfileError ? `${routingStrategyLabelId}-auth-profile-error` : undefined}
+                      onChange={(networkAuthFilesProfile) => onChange({ networkAuthFilesProfile })}
+                    />
+                    {networkAuthFilesProfileError ? (
+                      <div id={`${routingStrategyLabelId}-auth-profile-error`} className={styles.fieldError}>
+                        {networkAuthFilesProfileError}
+                      </div>
+                    ) : null}
+                  </FieldShell>
+                  <FieldShell
+                    label={t('config_management.visual.sections.network.oauth_login_profile', {
+                      defaultValue: 'OAuth Login Profile',
+                    })}
+                    hint={t('config_management.visual.sections.network.oauth_login_profile_hint', {
+                      defaultValue:
+                        'Used by interactive OAuth and device login flows before a stable account is available.',
+                    })}
+                  >
+                    <Select
+                      value={values.networkOAuthLoginProfile}
+                      options={networkProfileOptions}
+                      disabled={disabled}
+                      ariaDescribedBy={networkOAuthLoginProfileError ? `${routingStrategyLabelId}-oauth-profile-error` : undefined}
+                      onChange={(networkOAuthLoginProfile) => onChange({ networkOAuthLoginProfile })}
+                    />
+                    {networkOAuthLoginProfileError ? (
+                      <div id={`${routingStrategyLabelId}-oauth-profile-error`} className={styles.fieldError}>
+                        {networkOAuthLoginProfileError}
+                      </div>
+                    ) : null}
+                  </FieldShell>
+                </SectionGrid>
+              </SectionSubsection>
+
+              <SectionSubsection
+                title={t('config_management.visual.sections.network.profile_library_title', {
+                  defaultValue: 'Network Profiles',
+                })}
+                description={t('config_management.visual.sections.network.profile_library_desc', {
+                  defaultValue:
+                    'Define reusable proxy and Resin combinations here, then select them by name above.',
+                })}
+              >
+                {networkProfilesError ? (
+                  <div className={styles.fieldError}>{networkProfilesError}</div>
+                ) : null}
+                <div className={styles.blockStack}>
+                  {values.networkProfiles.length === 0 ? (
+                    <div className={styles.emptyState}>
+                      {t('config_management.visual.sections.network.profile_library_empty', {
+                        defaultValue: 'No network profiles yet.',
+                      })}
+                    </div>
+                  ) : (
+                    values.networkProfiles.map((profile, index) => (
+                      <div key={profile.id} className={styles.ruleCard}>
+                        <div className={styles.ruleCardHeader}>
+                          <div className={styles.ruleCardTitle}>
+                            {t('config_management.visual.sections.network.profile_card_title', {
+                              defaultValue: 'Profile {{index}}',
+                              index: index + 1,
+                            })}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={disabled}
+                            onClick={() => handleRemoveNetworkProfile(profile.id)}
+                          >
+                            <IconTrash2 size={16} />
+                          </Button>
+                        </div>
+                        <SectionGrid>
+                          <Input
+                            label={t('config_management.visual.sections.network.profile_name', {
+                              defaultValue: 'Profile Name',
+                            })}
+                            placeholder="corp-http"
+                            value={profile.name}
+                            onChange={(e) =>
+                              handleUpdateNetworkProfile(profile.id, { name: e.target.value })
+                            }
+                            disabled={disabled}
+                          />
+                          <Input
+                            label={t('config_management.visual.sections.network.profile_proxy_url', {
+                              defaultValue: 'Proxy URL',
+                            })}
+                            placeholder="http://127.0.0.1:7890"
+                            value={profile.proxyUrl}
+                            onChange={(e) =>
+                              handleUpdateNetworkProfile(profile.id, { proxyUrl: e.target.value })
+                            }
+                            disabled={disabled}
+                            hint={t('config_management.visual.sections.network.profile_proxy_url_hint', {
+                              defaultValue:
+                                'Optional. Use direct/none only in the selector, not inside the profile.',
+                            })}
+                          />
+                          <Input
+                            label={t('config_management.visual.sections.network.profile_resin_url', {
+                              defaultValue: 'Resin URL',
+                            })}
+                            placeholder="http://127.0.0.1:2260/my-token"
+                            value={profile.resinUrl}
+                            onChange={(e) =>
+                              handleUpdateNetworkProfile(profile.id, { resinUrl: e.target.value })
+                            }
+                            disabled={disabled}
+                          />
+                          <Input
+                            label={t(
+                              'config_management.visual.sections.network.profile_resin_platform_name',
+                              { defaultValue: 'Resin Platform Name' }
+                            )}
+                            placeholder="Default"
+                            value={profile.resinPlatformName}
+                            onChange={(e) =>
+                              handleUpdateNetworkProfile(profile.id, {
+                                resinPlatformName: e.target.value,
+                              })
+                            }
+                            disabled={disabled}
+                          />
+                        </SectionGrid>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className={styles.actionRow}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={disabled}
+                    onClick={handleAddNetworkProfile}
+                  >
+                    {t('config_management.visual.sections.network.add_profile', {
+                      defaultValue: 'Add Profile',
+                    })}
+                  </Button>
+                </div>
+              </SectionSubsection>
+
               <SectionGrid>
-                <Input
-                  label={t('config_management.visual.sections.network.proxy_url')}
-                  placeholder="socks5://user:pass@127.0.0.1:1080/"
-                  value={values.proxyUrl}
-                  onChange={(e) => onChange({ proxyUrl: e.target.value })}
-                  disabled={disabled}
-                  hint={t('config_management.visual.sections.network.proxy_url_hint')}
-                />
-                <Input
-                  label={t('config_management.visual.sections.network.resin_url')}
-                  placeholder="http://127.0.0.1:2260/my-token"
-                  value={values.resinUrl}
-                  onChange={(e) => onChange({ resinUrl: e.target.value })}
-                  disabled={disabled}
-                  hint={t('config_management.visual.sections.network.resin_url_hint')}
-                />
-                <Input
-                  label={t('config_management.visual.sections.network.resin_platform_name')}
-                  placeholder="Default"
-                  value={values.resinPlatformName}
-                  onChange={(e) => onChange({ resinPlatformName: e.target.value })}
-                  disabled={disabled}
-                  hint={t('config_management.visual.sections.network.resin_platform_name_hint')}
-                />
                 <Input
                   label={t('config_management.visual.sections.network.request_retry')}
                   type="number"

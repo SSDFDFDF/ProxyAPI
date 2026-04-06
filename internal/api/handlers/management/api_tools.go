@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/proxycfg"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/runtime/geminicli"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v6/sdk/proxyutil"
@@ -87,7 +88,7 @@ type apiCallResponse struct {
 //
 // Proxy selection (highest priority first):
 //  1. Selected credential proxy_url
-//  2. Global config proxy-url
+//  2. Resolved scope profile from proxy.ai-providers / proxy.auth-files / proxy.default
 //  3. Direct connect (environment proxies are not used)
 //
 // Response JSON (returned with HTTP 200 when the APICall itself succeeds):
@@ -641,10 +642,12 @@ func (h *Handler) apiCallTransport(auth *coreauth.Auth) http.RoundTripper {
 			if proxyStr := strings.TrimSpace(proxyURLFromAPIKeyConfig(h.cfg, auth)); proxyStr != "" {
 				proxyCandidates = append(proxyCandidates, proxyStr)
 			}
+			if proxyStr := strings.TrimSpace(proxycfg.ResolveScopeProxyURL(h.cfg, proxycfg.RuntimeScope(auth))); proxyStr != "" {
+				proxyCandidates = append(proxyCandidates, proxyStr)
+			}
 		}
-	}
-	if h != nil && h.cfg != nil {
-		if proxyStr := strings.TrimSpace(h.cfg.ProxyURL); proxyStr != "" {
+	} else if h != nil && h.cfg != nil {
+		if proxyStr := strings.TrimSpace(proxycfg.ResolveScopeProxyURL(h.cfg, proxycfg.ScopeDefault)); proxyStr != "" {
 			proxyCandidates = append(proxyCandidates, proxyStr)
 		}
 	}

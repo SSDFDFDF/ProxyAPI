@@ -21,6 +21,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/interfaces"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/misc"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/proxycfg"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/resin"
 	sdkAuth "github.com/router-for-me/CLIProxyAPI/v6/sdk/auth"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
@@ -77,7 +78,8 @@ func DoLogin(cfg *config.Config, projectID string, options *LoginOptions) {
 		TempAccount: resin.NewTempAccount("gemini"),
 		Mode:        resin.ModeForward,
 	}
-	effectiveCfg, _, errResinCfg := resin.CloneConfigWithForwardProxy(cfg, loginIdentity)
+	baseCfg := proxycfg.CloneWithScope(cfg, proxycfg.ScopeOAuthLogin)
+	effectiveCfg, _, errResinCfg := resin.CloneConfigWithForwardProxy(baseCfg, loginIdentity)
 	if errResinCfg != nil {
 		log.Errorf("Gemini authentication failed: %v", errResinCfg)
 		return

@@ -42,7 +42,6 @@ func (AntigravityAuthenticator) Login(ctx context.Context, cfg *config.Config, o
 	if opts == nil {
 		opts = &LoginOptions{}
 	}
-
 	callbackPort := antigravity.CallbackPort
 	if opts.CallbackPort > 0 {
 		callbackPort = opts.CallbackPort

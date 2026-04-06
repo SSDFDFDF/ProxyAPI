@@ -36,7 +36,7 @@ export const getQuotaConfigByType = (type: string): AnyQuotaConfig | null =>
   QUOTA_CONFIGS.find((config) => config.type === type) ?? null;
 
 export const resolveQuotaConfigForFile = (file: AuthFileItem): AnyQuotaConfig | null =>
-  QUOTA_CONFIGS.find((config) => config.filterFn(file)) ?? null;
+  QUOTA_CONFIGS.find((config) => config.matchesFile(file)) ?? null;
 
 const getQuotaSetter = (config: AnyQuotaConfig): QuotaSetter =>
   useQuotaStore.getState()[config.storeSetter] as QuotaSetter;

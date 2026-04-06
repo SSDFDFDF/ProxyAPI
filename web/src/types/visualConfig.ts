@@ -10,11 +10,23 @@ export type VisualConfigFieldPath =
   | 'requestRetry'
   | 'maxRetryCredentials'
   | 'maxRetryInterval'
+  | 'networkDefaultProfile'
+  | 'networkAIProvidersProfile'
+  | 'networkAuthFilesProfile'
+  | 'networkOAuthLoginProfile'
+  | 'networkProfiles'
   | 'streaming.keepaliveSeconds'
   | 'streaming.bootstrapRetries'
   | 'streaming.nonstreamKeepaliveInterval';
 
-export type VisualConfigValidationErrorCode = 'port_range' | 'non_negative_integer';
+export type VisualConfigValidationErrorCode =
+  | 'port_range'
+  | 'non_negative_integer'
+  | 'proxy_profile_missing'
+  | 'proxy_profile_duplicate'
+  | 'proxy_profile_invalid_name'
+  | 'proxy_profile_selector_missing'
+  | 'proxy_resin_incomplete';
 
 export type VisualConfigValidationErrors = Partial<
   Record<VisualConfigFieldPath, VisualConfigValidationErrorCode>
@@ -51,6 +63,14 @@ export interface StreamingConfig {
   nonstreamKeepaliveInterval: string;
 }
 
+export type NetworkProfileEntry = {
+  id: string;
+  name: string;
+  proxyUrl: string;
+  resinUrl: string;
+  resinPlatformName: string;
+};
+
 export type VisualConfigValues = {
   host: string;
   port: string;
@@ -68,9 +88,11 @@ export type VisualConfigValues = {
   loggingToFile: boolean;
   logsMaxTotalSizeMb: string;
   usageStatisticsEnabled: boolean;
-  proxyUrl: string;
-  resinUrl: string;
-  resinPlatformName: string;
+  networkProfiles: NetworkProfileEntry[];
+  networkDefaultProfile: string;
+  networkAIProvidersProfile: string;
+  networkAuthFilesProfile: string;
+  networkOAuthLoginProfile: string;
   forceModelPrefix: boolean;
   requestRetry: string;
   maxRetryCredentials: string;
@@ -113,9 +135,11 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   loggingToFile: false,
   logsMaxTotalSizeMb: '',
   usageStatisticsEnabled: false,
-  proxyUrl: '',
-  resinUrl: '',
-  resinPlatformName: '',
+  networkProfiles: [],
+  networkDefaultProfile: '',
+  networkAIProvidersProfile: '',
+  networkAuthFilesProfile: '',
+  networkOAuthLoginProfile: '',
   forceModelPrefix: false,
   requestRetry: '',
   maxRetryCredentials: '',

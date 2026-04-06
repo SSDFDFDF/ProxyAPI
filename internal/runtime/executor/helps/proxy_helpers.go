@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/proxycfg"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/resin"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v6/sdk/proxyutil"
@@ -19,7 +20,8 @@ var proxyTransportCache sync.Map
 var resinRoundTripperCache sync.Map
 
 type resinRoundTripperCacheKey struct {
-	cfg      *config.Config
+	resinURL string
+	platform string
 	provider string
 	account  string
 	mode     resin.Mode
@@ -27,7 +29,7 @@ type resinRoundTripperCacheKey struct {
 
 // NewProxyAwareHTTPClient creates an HTTP client with proper proxy configuration priority:
 // 1. Use auth.ProxyURL if configured (highest priority)
-// 2. Use cfg.ProxyURL if auth proxy is not configured
+// 2. Use the resolved scope profile from proxy.ai-providers / proxy.auth-files / proxy.default
 // 3. Use RoundTripper from context if neither are configured
 //
 // Parameters:
@@ -46,15 +48,10 @@ func NewProxyAwareHTTPClient(ctx context.Context, cfg *config.Config, auth *clip
 
 	var baseTransport http.RoundTripper
 
-	// Priority 1: Use auth.ProxyURL if configured
-	var proxyURL string
-	if auth != nil {
-		proxyURL = strings.TrimSpace(auth.ProxyURL)
-	}
-
-	// Priority 2: Use cfg.ProxyURL if auth proxy is not configured
-	if proxyURL == "" && cfg != nil {
-		proxyURL = strings.TrimSpace(cfg.ProxyURL)
+	effectiveCfg := proxycfg.CloneWithRuntime(cfg, auth)
+	proxyURL := ""
+	if effectiveCfg != nil {
+		proxyURL = strings.TrimSpace(effectiveCfg.ProxyURL)
 	}
 
 	// If we have a proxy URL configured, set up the transport
@@ -75,7 +72,7 @@ func NewProxyAwareHTTPClient(ctx context.Context, cfg *config.Config, auth *clip
 	// Resin reverse proxy rewrites the URL to point at the Resin server directly,
 	// so the underlying transport must NOT also route through the original proxy —
 	// that would cause double-proxying. Pass nil so Resin uses a clean transport.
-	if wrapped := wrapResinRoundTripper(cfg, auth, nil); wrapped != nil {
+	if wrapped := wrapResinRoundTripper(effectiveCfg, auth, nil); wrapped != nil {
 		httpClient.Transport = wrapped
 		return httpClient
 	}
@@ -147,7 +144,8 @@ func wrapResinRoundTripper(cfg *config.Config, auth *cliproxyauth.Auth, base htt
 	}
 
 	key := resinRoundTripperCacheKey{
-		cfg:      cfg,
+		resinURL: strings.TrimSpace(cfg.ResinURL),
+		platform: strings.TrimSpace(cfg.ResinPlatformName),
 		provider: strings.TrimSpace(identity.Provider),
 		account:  strings.TrimSpace(identity.Account),
 		mode:     identity.Mode,
@@ -176,23 +174,27 @@ func wrapResinRoundTripper(cfg *config.Config, auth *cliproxyauth.Auth, base htt
 }
 
 func ConfigWithResinForwardProxy(cfg *config.Config, auth *cliproxyauth.Auth) *config.Config {
-	if cfg == nil || auth == nil {
-		return cfg
+	effectiveCfg := proxycfg.CloneWithRuntime(cfg, auth)
+	if effectiveCfg == nil || auth == nil {
+		return effectiveCfg
 	}
 
 	account := resin.StableAccount(auth.Provider, auth.Attributes, auth.Metadata, auth.EnsureIndex())
 	if account == "" {
-		return cfg
+		return effectiveCfg
 	}
 
-	clone, _, err := resin.CloneConfigWithForwardProxy(cfg, resin.Identity{
+	clone, _, err := resin.CloneConfigWithForwardProxy(effectiveCfg, resin.Identity{
 		Provider: auth.Provider,
 		Account:  account,
 		Mode:     resin.ModeForward,
 	})
 	if err != nil {
 		log.Errorf("resin auth routing disabled: %v", err)
-		return cfg
+		return effectiveCfg
+	}
+	if clone == nil {
+		return effectiveCfg
 	}
 	return clone
 }

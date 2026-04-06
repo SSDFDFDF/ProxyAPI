@@ -37,7 +37,6 @@ func (a *GeminiAuthenticator) Login(ctx context.Context, cfg *config.Config, opt
 	if opts == nil {
 		opts = &LoginOptions{}
 	}
-
 	var ts gemini.GeminiTokenStorage
 	if opts.ProjectID != "" {
 		ts.ProjectID = opts.ProjectID

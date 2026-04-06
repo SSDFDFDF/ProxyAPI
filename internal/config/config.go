@@ -635,8 +635,7 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 
 	cfg.RemoteManagement.PanelGitHubRepository = strings.TrimSpace(cfg.RemoteManagement.PanelGitHubRepository)
 
-	cfg.ResinURL = strings.TrimSpace(cfg.ResinURL)
-	cfg.ResinPlatformName = strings.TrimSpace(cfg.ResinPlatformName)
+	cfg.SanitizeProxyConfig()
 
 	cfg.Pprof.Addr = strings.TrimSpace(cfg.Pprof.Addr)
 	if cfg.Pprof.Addr == "" {
@@ -1044,6 +1043,7 @@ func SaveConfigPreserveComments(configFile string, cfg *Config) error {
 	removeLegacyOpenAICompatAPIKeys(original.Content[0])
 	removeLegacyAmpKeys(original.Content[0])
 	removeLegacyGenerativeLanguageKeys(original.Content[0])
+	removeLegacyProxyKeys(original.Content[0])
 
 	pruneMappingToGeneratedKeys(original.Content[0], generated.Content[0], "oauth-excluded-models")
 	pruneMappingToGeneratedKeys(original.Content[0], generated.Content[0], "oauth-model-alias")
@@ -1896,6 +1896,15 @@ func removeLegacyGenerativeLanguageKeys(root *yaml.Node) {
 		return
 	}
 	removeMapKey(root, "generative-language-api-key")
+}
+
+func removeLegacyProxyKeys(root *yaml.Node) {
+	if root == nil || root.Kind != yaml.MappingNode {
+		return
+	}
+	removeMapKey(root, "proxy-url")
+	removeMapKey(root, "resin-url")
+	removeMapKey(root, "resin-platform-name")
 }
 
 func removeLegacyAuthBlock(root *yaml.Node) {

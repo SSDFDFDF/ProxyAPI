@@ -60,9 +60,7 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 	if oldCfg.MaxRetryInterval != newCfg.MaxRetryInterval {
 		changes = append(changes, fmt.Sprintf("max-retry-interval: %d -> %d", oldCfg.MaxRetryInterval, newCfg.MaxRetryInterval))
 	}
-	if oldCfg.ProxyURL != newCfg.ProxyURL {
-		changes = append(changes, fmt.Sprintf("proxy-url: %s -> %s", formatProxyURL(oldCfg.ProxyURL), formatProxyURL(newCfg.ProxyURL)))
-	}
+	appendProxyConfigChanges(&changes, oldCfg, newCfg)
 	if oldCfg.WebsocketAuth != newCfg.WebsocketAuth {
 		changes = append(changes, fmt.Sprintf("ws-auth: %t -> %t", oldCfg.WebsocketAuth, newCfg.WebsocketAuth))
 	}
@@ -342,6 +340,67 @@ func equalStringMap(a, b map[string]string) bool {
 		}
 	}
 	return true
+}
+
+func appendProxyConfigChanges(changes *[]string, oldCfg, newCfg *config.Config) {
+	if changes == nil || oldCfg == nil || newCfg == nil {
+		return
+	}
+
+	oldProxy := config.CloneNormalizedProxyConfig(oldCfg)
+	newProxy := config.CloneNormalizedProxyConfig(newCfg)
+	if oldProxy == nil || newProxy == nil {
+		return
+	}
+
+	if strings.TrimSpace(oldProxy.Proxy.Default) != strings.TrimSpace(newProxy.Proxy.Default) {
+		*changes = append(*changes, fmt.Sprintf("proxy.default: %s -> %s", formatProxySelection(oldProxy.Proxy.Default), formatProxySelection(newProxy.Proxy.Default)))
+	}
+	if strings.TrimSpace(oldProxy.Proxy.AIProviders) != strings.TrimSpace(newProxy.Proxy.AIProviders) {
+		*changes = append(*changes, fmt.Sprintf("proxy.ai-providers: %s -> %s", formatProxySelection(oldProxy.Proxy.AIProviders), formatProxySelection(newProxy.Proxy.AIProviders)))
+	}
+	if strings.TrimSpace(oldProxy.Proxy.AuthFiles) != strings.TrimSpace(newProxy.Proxy.AuthFiles) {
+		*changes = append(*changes, fmt.Sprintf("proxy.auth-files: %s -> %s", formatProxySelection(oldProxy.Proxy.AuthFiles), formatProxySelection(newProxy.Proxy.AuthFiles)))
+	}
+	if strings.TrimSpace(oldProxy.Proxy.OAuthLogin) != strings.TrimSpace(newProxy.Proxy.OAuthLogin) {
+		*changes = append(*changes, fmt.Sprintf("proxy.oauth-login: %s -> %s", formatProxySelection(oldProxy.Proxy.OAuthLogin), formatProxySelection(newProxy.Proxy.OAuthLogin)))
+	}
+
+	seen := make(map[string]struct{})
+	for name := range oldProxy.Proxy.Profiles {
+		seen[name] = struct{}{}
+	}
+	for name := range newProxy.Proxy.Profiles {
+		seen[name] = struct{}{}
+	}
+	for name := range seen {
+		oldProfile, oldOK := oldProxy.Proxy.Profiles[name]
+		newProfile, newOK := newProxy.Proxy.Profiles[name]
+		switch {
+		case !oldOK && newOK:
+			*changes = append(*changes, fmt.Sprintf("proxy.profiles[%s]: added", name))
+		case oldOK && !newOK:
+			*changes = append(*changes, fmt.Sprintf("proxy.profiles[%s]: removed", name))
+		default:
+			if strings.TrimSpace(oldProfile.ProxyURL) != strings.TrimSpace(newProfile.ProxyURL) {
+				*changes = append(*changes, fmt.Sprintf("proxy.profiles[%s].proxy-url: %s -> %s", name, formatProxyURL(oldProfile.ProxyURL), formatProxyURL(newProfile.ProxyURL)))
+			}
+			if strings.TrimSpace(oldProfile.ResinURL) != strings.TrimSpace(newProfile.ResinURL) {
+				*changes = append(*changes, fmt.Sprintf("proxy.profiles[%s].resin-url: %s -> %s", name, formatProxyURL(oldProfile.ResinURL), formatProxyURL(newProfile.ResinURL)))
+			}
+			if strings.TrimSpace(oldProfile.ResinPlatformName) != strings.TrimSpace(newProfile.ResinPlatformName) {
+				*changes = append(*changes, fmt.Sprintf("proxy.profiles[%s].resin-platform-name: %s -> %s", name, formatProxySelection(oldProfile.ResinPlatformName), formatProxySelection(newProfile.ResinPlatformName)))
+			}
+		}
+	}
+}
+
+func formatProxySelection(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "<none>"
+	}
+	return trimmed
 }
 
 func formatProxyURL(raw string) string {

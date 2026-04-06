@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/proxycfg"
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/resin"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
 )
@@ -54,7 +55,8 @@ func (m *Manager) Login(ctx context.Context, provider string, cfg *config.Config
 	}
 
 	loginIdentity := buildLoginResinIdentity(provider, opts)
-	effectiveCfg, _, err := resin.CloneConfigWithForwardProxy(cfg, loginIdentity)
+	baseCfg := proxycfg.CloneWithScope(cfg, proxycfg.ScopeOAuthLogin)
+	effectiveCfg, _, err := resin.CloneConfigWithForwardProxy(baseCfg, loginIdentity)
 	if err != nil {
 		return nil, "", err
 	}

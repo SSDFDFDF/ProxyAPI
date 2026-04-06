@@ -235,8 +235,13 @@ func TestBuildConfigChangeDetails_FlagsAndKeys(t *testing.T) {
 		AmpCode:                config.AmpCode{UpstreamAPIKey: "keep", RestrictManagementToLocalhost: false},
 		RemoteManagement:       config.RemoteManagement{DisableControlPanel: false, PanelGitHubRepository: "old/repo", SecretKey: "keep"},
 		SDKConfig: sdkconfig.SDKConfig{
-			RequestLog:                 false,
-			ProxyURL:                   "http://old-proxy",
+			RequestLog: false,
+			Proxy: config.ProxyConfig{
+				Profiles: map[string]config.ProxyProfile{
+					"old-default": {ProxyURL: "http://old-proxy"},
+				},
+				Default: "old-default",
+			},
 			APIKeys:                    []string{"key-1"},
 			ForceModelPrefix:           false,
 			NonStreamKeepAliveInterval: 0,
@@ -274,8 +279,13 @@ func TestBuildConfigChangeDetails_FlagsAndKeys(t *testing.T) {
 			SecretKey:              "",
 		},
 		SDKConfig: sdkconfig.SDKConfig{
-			RequestLog:                 true,
-			ProxyURL:                   "http://new-proxy",
+			RequestLog: true,
+			Proxy: config.ProxyConfig{
+				Profiles: map[string]config.ProxyProfile{
+					"new-default": {ProxyURL: "http://new-proxy"},
+				},
+				Default: "new-default",
+			},
 			APIKeys:                    []string{" key-1 ", "key-2"},
 			ForceModelPrefix:           true,
 			NonStreamKeepAliveInterval: 5,
@@ -291,7 +301,9 @@ func TestBuildConfigChangeDetails_FlagsAndKeys(t *testing.T) {
 	expectContains(t, details, "request-retry: 1 -> 2")
 	expectContains(t, details, "max-retry-credentials: 1 -> 3")
 	expectContains(t, details, "max-retry-interval: 1 -> 3")
-	expectContains(t, details, "proxy-url: http://old-proxy -> http://new-proxy")
+	expectContains(t, details, "proxy.default: old-default -> new-default")
+	expectContains(t, details, "proxy.profiles[old-default]: removed")
+	expectContains(t, details, "proxy.profiles[new-default]: added")
 	expectContains(t, details, "ws-auth: false -> true")
 	expectContains(t, details, "force-model-prefix: false -> true")
 	expectContains(t, details, "nonstream-keepalive-interval: 0 -> 5")
@@ -350,8 +362,13 @@ func TestBuildConfigChangeDetails_AllBranches(t *testing.T) {
 		},
 		SDKConfig: sdkconfig.SDKConfig{
 			RequestLog: false,
-			ProxyURL:   "http://old-proxy",
-			APIKeys:    []string{" keyA "},
+			Proxy: config.ProxyConfig{
+				Profiles: map[string]config.ProxyProfile{
+					"old-default": {ProxyURL: "http://old-proxy"},
+				},
+				Default: "old-default",
+			},
+			APIKeys: []string{" keyA "},
 		},
 		OAuthExcludedModels: map[string][]string{"p1": {"a"}},
 		OpenAICompatibility: []config.OpenAICompatibility{
@@ -404,8 +421,13 @@ func TestBuildConfigChangeDetails_AllBranches(t *testing.T) {
 		},
 		SDKConfig: sdkconfig.SDKConfig{
 			RequestLog: true,
-			ProxyURL:   "http://new-proxy",
-			APIKeys:    []string{"keyB"},
+			Proxy: config.ProxyConfig{
+				Profiles: map[string]config.ProxyProfile{
+					"new-default": {ProxyURL: "http://new-proxy"},
+				},
+				Default: "new-default",
+			},
+			APIKeys: []string{"keyB"},
 		},
 		OAuthExcludedModels: map[string][]string{"p1": {"b", "c"}, "p2": {"d"}},
 		OpenAICompatibility: []config.OpenAICompatibility{
@@ -434,7 +456,9 @@ func TestBuildConfigChangeDetails_AllBranches(t *testing.T) {
 	expectContains(t, changes, "request-retry: 1 -> 2")
 	expectContains(t, changes, "max-retry-credentials: 1 -> 3")
 	expectContains(t, changes, "max-retry-interval: 1 -> 3")
-	expectContains(t, changes, "proxy-url: http://old-proxy -> http://new-proxy")
+	expectContains(t, changes, "proxy.default: old-default -> new-default")
+	expectContains(t, changes, "proxy.profiles[old-default]: removed")
+	expectContains(t, changes, "proxy.profiles[new-default]: added")
 	expectContains(t, changes, "ws-auth: false -> true")
 	expectContains(t, changes, "quota-exceeded.switch-project: false -> true")
 	expectContains(t, changes, "quota-exceeded.switch-preview-model: false -> true")

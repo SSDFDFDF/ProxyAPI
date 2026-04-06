@@ -40,6 +40,16 @@
     font-size: 12px;
     line-height: 1.6;
   }
+}
+
+.fieldError {
+  margin-top: 6px;
+  color: var(--danger-text, #dc2626);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.visualEditor {
 
   :global(.error-box) {
     border-radius: 14px;

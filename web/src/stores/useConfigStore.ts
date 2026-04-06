@@ -35,7 +35,6 @@ let inFlightConfigRequest: { id: number; promise: Promise<Config> } | null = nul
 
 const SECTION_KEYS: RawConfigSection[] = [
   'debug',
-  'proxy-url',
   'request-retry',
   'quota-exceeded',
   'usage-statistics-enabled',
@@ -60,8 +59,6 @@ const extractSectionValue = (config: Config | null, section?: RawConfigSection) 
   switch (section) {
     case 'debug':
       return config.debug;
-    case 'proxy-url':
-      return config.proxyUrl;
     case 'request-retry':
       return config.requestRetry;
     case 'quota-exceeded':
@@ -192,9 +189,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       switch (section) {
         case 'debug':
           nextConfig.debug = value as Config['debug'];
-          break;
-        case 'proxy-url':
-          nextConfig.proxyUrl = value as Config['proxyUrl'];
           break;
         case 'request-retry':
           nextConfig.requestRetry = value as Config['requestRetry'];

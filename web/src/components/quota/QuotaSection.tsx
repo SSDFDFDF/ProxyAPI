@@ -12,7 +12,7 @@ import { Select } from '@/components/ui/Select';
 import { triggerHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import type { AuthFileItem, ResolvedTheme } from '@/types';
-import { getStatusFromError } from '@/utils/quota';
+import { getStatusFromError, isDisabledAuthFile } from '@/utils/quota';
 import { QuotaCard } from './QuotaCard';
 import type { QuotaStatusState } from './QuotaCard';
 import { useQuotaLoader } from './useQuotaLoader';
@@ -27,10 +27,10 @@ type QuotaSetter<T> = (updater: QuotaUpdater<T>) => void;
 
 type ViewMode = 'paged' | 'all';
 
-const DEFAULT_ITEMS_PER_PAGE = 12;
+const DEFAULT_ITEMS_PER_PAGE = 15;
 const MAX_ITEMS_PER_PAGE = 100;
 const MAX_SHOW_ALL_THRESHOLD = 100;
-const PAGE_SIZE_OPTIONS = [6, 12, 24, 48, MAX_ITEMS_PER_PAGE].map((value) => ({
+const PAGE_SIZE_OPTIONS = [15, 25, 50, MAX_ITEMS_PER_PAGE].map((value) => ({
   value: String(value),
   label: String(value),
 }));
@@ -106,13 +106,15 @@ interface QuotaSectionProps<TState extends QuotaStatusState, TData> {
   files: AuthFileItem[];
   loading: boolean;
   disabled: boolean;
+  includeDisabled?: boolean;
 }
 
 export function QuotaSection<TState extends QuotaStatusState, TData>({
   config,
   files,
   loading,
-  disabled
+  disabled,
+  includeDisabled = false
 }: QuotaSectionProps<TState, TData>) {
   const { t } = useTranslation();
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
@@ -125,10 +127,13 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   const [viewMode, setViewMode] = useState<ViewMode>('paged');
   const [showTooManyWarning, setShowTooManyWarning] = useState(false);
 
-  const filteredFiles = useMemo(() => files.filter((file) => config.filterFn(file)), [
-    files,
-    config
-  ]);
+  const filteredFiles = useMemo(
+    () =>
+      files.filter(
+        (file) => config.matchesFile(file) && (includeDisabled || !isDisabledAuthFile(file))
+      ),
+    [files, config, includeDisabled]
+  );
   const showAllAllowed = filteredFiles.length <= MAX_SHOW_ALL_THRESHOLD;
   const effectiveViewMode: ViewMode = viewMode === 'all' && !showAllAllowed ? 'paged' : viewMode;
 
@@ -206,7 +211,8 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
 
   const refreshQuotaForFile = useCallback(
     async (file: AuthFileItem) => {
-      if (disabled || file.disabled) return;
+      if (disabled) return;
+      if (!includeDisabled && isDisabledAuthFile(file)) return;
       if (quota[file.name]?.status === 'loading') return;
 
       setQuota((prev) => ({
@@ -234,7 +240,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
         );
       }
     },
-    [config, disabled, quota, setQuota, showNotification, t]
+    [config, disabled, includeDisabled, quota, setQuota, showNotification, t]
   );
 
   const titleNode = (
@@ -323,7 +329,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                 cardIdleMessageKey={config.cardIdleMessageKey}
                 cardClassName={config.cardClassName}
                 defaultType={config.type}
-                canRefresh={!disabled && !item.disabled}
+                canRefresh={!disabled && (includeDisabled || !isDisabledAuthFile(item))}
                 onRefresh={() => void refreshQuotaForFile(item)}
                 renderQuotaItems={config.renderQuotaItems}
               />

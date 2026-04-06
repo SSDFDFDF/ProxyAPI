@@ -68,12 +68,37 @@ error-logs-max-files: 10
 usage-statistics-enabled: false
 
 # Proxy URL. Supports socks5/http/https protocols. Example: socks5://user:pass@192.168.1.1:1080/
-# Per-entry proxy-url also supports "direct" or "none" to bypass both the global proxy-url and environment proxies explicitly.
+# Legacy unnamed default network config. Keep using this (and the Resin fields below) if you only need one setup.
+# Per-entry proxy-url also supports "direct" or "none" to bypass both the selected/default proxy and environment proxies explicitly.
 proxy-url: ""
 
+# Centralized network profiles plus scope selectors.
+# Each scope selects one profile name, and all profile contents are defined in one place.
+# Selector values:
+#   - ""            : inherit proxy.default
+#   - "direct"      : disable both proxy and Resin for this scope
+#   - "<profile>"   : use that named profile
+# If proxy.default is empty, the legacy top-level proxy-url / resin-url / resin-platform-name are used.
+# proxy:
+#   profiles:
+#     corp-http:
+#       proxy-url: "http://127.0.0.1:7890"
+#     resin-main:
+#       resin-url: "http://127.0.0.1:2260/my-token"
+#       resin-platform-name: "Default"
+#     hybrid:
+#       proxy-url: "http://127.0.0.1:7890"
+#       resin-url: "http://127.0.0.1:2260/my-token"
+#       resin-platform-name: "Default"
+#   default: "corp-http"
+#   ai-providers: ""      # inherit proxy.default
+#   auth-files: "direct"  # bypass both proxy.default and Resin
+#   oauth-login: "resin-main"
+
 # Resin sticky proxy pool base URL including the token path.
-# When configured, all account-level traffic is routed through Resin instead of proxy-url.
-# proxy-url will only apply to requests that are not associated with a specific account.
+# Legacy unnamed default Resin config. Keep using this if you only need one setup.
+# When configured together with proxy-url, Resin applies to account-scoped traffic and proxy-url
+# still applies to generic/non-account traffic.
 # Example: http://127.0.0.1:2260/my-token
 resin-url: ""
 

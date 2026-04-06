@@ -394,12 +394,6 @@ export function DashboardPage() {
                 {routingStrategyDisplay}
               </span>
             </div>
-            {config.proxyUrl && (
-              <div className={`${styles.configPill} ${styles.configPillWide}`}>
-                <span className={styles.configPillLabel}>{t('basic_settings.proxy_url_label')}</span>
-                <span className={styles.configPillMono}>{config.proxyUrl}</span>
-              </div>
-            )}
           </div>
           <Link to="/config" className={styles.viewMoreLink}>
             {t('dashboard.edit_settings')} →
