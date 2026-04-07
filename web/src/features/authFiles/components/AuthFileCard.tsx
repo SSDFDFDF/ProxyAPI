@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/icons';
 import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
 import type { AuthFileItem } from '@/types';
-import { resolveAuthProvider } from '@/utils/quota';
+import { isDisabledAuthFile, resolveAuthProvider } from '@/utils/quota';
 import { calculateStatusBarData, normalizeAuthIndex, type KeyStats } from '@/utils/usage';
 import { formatFileSize } from '@/utils/format';
 import {
@@ -40,6 +40,7 @@ export type AuthFileCardProps = {
   selected: boolean;
   resolvedTheme: ResolvedTheme;
   disableControls: boolean;
+  includeDisabledQuota: boolean;
   deleting: string | null;
   statusUpdating: Record<string, boolean>;
   quotaFilterType: QuotaProviderType | null;
@@ -67,6 +68,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
     selected,
     resolvedTheme,
     disableControls,
+    includeDisabledQuota,
     deleting,
     statusUpdating,
     quotaFilterType,
@@ -82,6 +84,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
 
   const fileStats = resolveAuthFileStats(file, keyStats);
   const isRuntimeOnly = isRuntimeOnlyAuthFile(file);
+  const isDisabled = isDisabledAuthFile(file);
   const isAistudio = (file.type || '').toLowerCase() === 'aistudio';
   const showModelsButton = !isRuntimeOnly || isAistudio;
   const typeColor = getTypeColor(file.type || 'unknown', resolvedTheme);
@@ -91,7 +94,8 @@ export function AuthFileCard(props: AuthFileCardProps) {
   const quotaType =
     quotaFilterType && resolveQuotaType(file) === quotaFilterType ? quotaFilterType : null;
 
-  const showQuotaLayout = Boolean(quotaType) && !isRuntimeOnly && !compact;
+  const showQuotaLayout =
+    Boolean(quotaType) && !isRuntimeOnly && !compact && (includeDisabledQuota || !isDisabled);
 
   const providerCardClass =
     quotaType === 'antigravity'
@@ -245,6 +249,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
                 file={file}
                 quotaType={quotaType}
                 disableControls={disableControls}
+                includeDisabled={includeDisabledQuota}
               />
             )}
           </div>

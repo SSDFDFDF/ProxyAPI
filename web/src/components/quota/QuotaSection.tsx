@@ -12,7 +12,7 @@ import { Select } from '@/components/ui/Select';
 import { triggerHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import type { AuthFileItem, ResolvedTheme } from '@/types';
-import { getStatusFromError, isDisabledAuthFile } from '@/utils/quota';
+import { getSearchTextFromError, getStatusFromError, isDisabledAuthFile } from '@/utils/quota';
 import { QuotaCard } from './QuotaCard';
 import type { QuotaStatusState } from './QuotaCard';
 import { useQuotaLoader } from './useQuotaLoader';
@@ -230,9 +230,10 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : t('common.unknown_error');
         const status = getStatusFromError(err);
+        const searchText = getSearchTextFromError(err) ?? message;
         setQuota((prev) => ({
           ...prev,
-          [file.name]: config.buildErrorState(message, status)
+          [file.name]: config.buildErrorState(message, status, searchText)
         }));
         showNotification(
           t('auth_files.quota_refresh_failed', { name: file.name, message }),

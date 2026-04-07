@@ -3,7 +3,7 @@ import { useQuotaStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
 import { QUOTA_REFRESH_CONCURRENCY } from '@/utils/constants';
 import { mapWithConcurrencyLimit } from '@/utils/async';
-import { getStatusFromError } from '@/utils/quota';
+import { getSearchTextFromError, getStatusFromError } from '@/utils/quota';
 import {
   ANTIGRAVITY_CONFIG,
   CLAUDE_CONFIG,
@@ -70,9 +70,10 @@ async function refreshQuotaGroup(
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : t('common.unknown_error');
         const errorStatus = getStatusFromError(err);
+        const searchText = getSearchTextFromError(err) ?? message;
         setQuota((prev: Record<string, unknown>) => ({
           ...prev,
-          [file.name]: config.buildErrorState(message, errorStatus),
+          [file.name]: config.buildErrorState(message, errorStatus, searchText),
         }));
         return {
           name: file.name,

@@ -63,6 +63,7 @@ import {
   formatCodexResetLabel,
   formatQuotaResetTime,
   formatKimiResetHint,
+  getSearchTextFromError,
   buildAntigravityQuotaGroups,
   buildGeminiCliQuotaBuckets,
   buildKimiQuotaRows,
@@ -82,6 +83,11 @@ import styles from '@/pages/QuotaPage.module.scss';
 type QuotaUpdater<T> = T | ((prev: T) => T);
 
 type QuotaType = 'antigravity' | 'claude' | 'codex' | 'gemini-cli' | 'kimi';
+
+export interface QuotaFetchResult<TData> {
+  data: TData;
+  searchText?: string;
+}
 
 const DEFAULT_ANTIGRAVITY_PROJECT_ID = 'bamboo-precept-lgxtn';
 const QUOTA_PROGRESS_HIGH_THRESHOLD = 70;
@@ -112,12 +118,12 @@ export interface QuotaConfig<TState, TData> {
   i18nPrefix: string;
   cardIdleMessageKey?: string;
   matchesFile: (file: AuthFileItem) => boolean;
-  fetchQuota: (file: AuthFileItem, t: TFunction) => Promise<TData>;
+  fetchQuota: (file: AuthFileItem, t: TFunction) => Promise<QuotaFetchResult<TData>>;
   storeSelector: (state: QuotaStore) => Record<string, TState>;
   storeSetter: keyof QuotaStore;
   buildLoadingState: () => TState;
-  buildSuccessState: (data: TData) => TState;
-  buildErrorState: (message: string, status?: number) => TState;
+  buildSuccessState: (result: QuotaFetchResult<TData>) => TState;
+  buildErrorState: (message: string, status?: number, searchText?: string) => TState;
   cardClassName: string;
   controlsClassName: string;
   controlClassName: string;
@@ -160,7 +166,7 @@ const resolveAntigravityProjectId = async (file: AuthFileItem): Promise<string> 
 const fetchAntigravityQuota = async (
   file: AuthFileItem,
   t: TFunction
-): Promise<AntigravityQuotaGroup[]> => {
+): Promise<QuotaFetchResult<AntigravityQuotaGroup[]>> => {
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
@@ -172,8 +178,10 @@ const fetchAntigravityQuota = async (
 
   let lastError = '';
   let lastStatus: number | undefined;
+  let lastSearchText = '';
   let priorityStatus: number | undefined;
   let hadSuccess = false;
+  let successfulSearchText = '';
 
   for (const url of ANTIGRAVITY_QUOTA_URLS) {
     try {
@@ -188,6 +196,7 @@ const fetchAntigravityQuota = async (
       if (result.statusCode < 200 || result.statusCode >= 300) {
         lastError = getApiCallErrorMessage(result);
         lastStatus = result.statusCode;
+        lastSearchText = result.bodyText;
         if (result.statusCode === 403 || result.statusCode === 404) {
           priorityStatus ??= result.statusCode;
         }
@@ -195,6 +204,7 @@ const fetchAntigravityQuota = async (
       }
 
       hadSuccess = true;
+      successfulSearchText = result.bodyText;
       const payload = parseAntigravityPayload(result.body ?? result.bodyText);
       const models = payload?.models;
       if (!models || typeof models !== 'object' || Array.isArray(models)) {
@@ -208,9 +218,10 @@ const fetchAntigravityQuota = async (
         continue;
       }
 
-      return groups;
+      return { data: groups, searchText: result.bodyText };
     } catch (err: unknown) {
       lastError = err instanceof Error ? err.message : t('common.unknown_error');
+      lastSearchText = getSearchTextFromError(err) ?? lastSearchText;
       const status = getStatusFromError(err);
       if (status) {
         lastStatus = status;
@@ -222,10 +233,14 @@ const fetchAntigravityQuota = async (
   }
 
   if (hadSuccess) {
-    return [];
+    return { data: [], searchText: successfulSearchText };
   }
 
-  throw createStatusError(lastError || t('common.unknown_error'), priorityStatus ?? lastStatus);
+  throw createStatusError(
+    lastError || t('common.unknown_error'),
+    priorityStatus ?? lastStatus,
+    lastSearchText
+  );
 };
 
 const buildCodexQuotaWindows = (payload: CodexUsagePayload, t: TFunction): CodexQuotaWindow[] => {
@@ -402,7 +417,7 @@ const buildCodexQuotaWindows = (payload: CodexUsagePayload, t: TFunction): Codex
 const fetchCodexQuota = async (
   file: AuthFileItem,
   t: TFunction
-): Promise<{ planType: string | null; windows: CodexQuotaWindow[] }> => {
+): Promise<QuotaFetchResult<{ planType: string | null; windows: CodexQuotaWindow[] }>> => {
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
@@ -428,7 +443,7 @@ const fetchCodexQuota = async (
   }, QUOTA_REQUEST_CONFIG);
 
   if (result.statusCode < 200 || result.statusCode >= 300) {
-    throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
+    throw createStatusError(getApiCallErrorMessage(result), result.statusCode, result.bodyText);
   }
 
   const payload = parseCodexUsagePayload(result.body ?? result.bodyText);
@@ -438,7 +453,10 @@ const fetchCodexQuota = async (
 
   const planTypeFromUsage = normalizePlanType(payload.plan_type ?? payload.planType);
   const windows = buildCodexQuotaWindows(payload, t);
-  return { planType: planTypeFromUsage ?? planTypeFromFile, windows };
+  return {
+    data: { planType: planTypeFromUsage ?? planTypeFromFile, windows },
+    searchText: result.bodyText,
+  };
 };
 
 const GEMINI_CLI_G1_CREDIT_TYPE = 'GOOGLE_ONE_AI';
@@ -608,14 +626,16 @@ const scheduleGeminiCliSupplementaryRefresh = (
 const fetchGeminiCliQuota = async (
   file: AuthFileItem,
   t: TFunction
-): Promise<{
-  fileName: string;
-  supplementaryRequestId: number;
-  buckets: GeminiCliQuotaBucketState[];
-  tierLabel: string | null;
-  tierId: string | null;
-  creditBalance: number | null;
-}> => {
+): Promise<
+  QuotaFetchResult<{
+    fileName: string;
+    supplementaryRequestId: number;
+    buckets: GeminiCliQuotaBucketState[];
+    tierLabel: string | null;
+    tierId: string | null;
+    creditBalance: number | null;
+  }>
+> => {
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
@@ -635,7 +655,11 @@ const fetchGeminiCliQuota = async (
     data: JSON.stringify({ project: projectId }),
   }, QUOTA_REQUEST_CONFIG);
   if (quotaResponse.statusCode < 200 || quotaResponse.statusCode >= 300) {
-    throw createStatusError(getApiCallErrorMessage(quotaResponse), quotaResponse.statusCode);
+    throw createStatusError(
+      getApiCallErrorMessage(quotaResponse),
+      quotaResponse.statusCode,
+      quotaResponse.bodyText
+    );
   }
 
   const payload = parseGeminiCliQuotaPayload(quotaResponse.body ?? quotaResponse.bodyText);
@@ -683,12 +707,15 @@ const fetchGeminiCliQuota = async (
   );
 
   return {
-    fileName: file.name,
-    supplementaryRequestId,
-    buckets: builtBuckets,
-    tierLabel: supplementarySnapshot.tierLabel,
-    tierId: supplementarySnapshot.tierId,
-    creditBalance: supplementarySnapshot.creditBalance,
+    data: {
+      fileName: file.name,
+      supplementaryRequestId,
+      buckets: builtBuckets,
+      tierLabel: supplementarySnapshot.tierLabel,
+      tierId: supplementarySnapshot.tierId,
+      creditBalance: supplementarySnapshot.creditBalance,
+    },
+    searchText: quotaResponse.bodyText,
   };
 };
 
@@ -979,7 +1006,13 @@ const resolveClaudePlanType = (profile: ClaudeProfileResponse | null): string | 
 const fetchClaudeQuota = async (
   file: AuthFileItem,
   t: TFunction
-): Promise<{ windows: ClaudeQuotaWindow[]; extraUsage?: ClaudeExtraUsage | null; planType?: string | null }> => {
+): Promise<
+  QuotaFetchResult<{
+    windows: ClaudeQuotaWindow[];
+    extraUsage?: ClaudeExtraUsage | null;
+    planType?: string | null;
+  }>
+> => {
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
@@ -1008,7 +1041,7 @@ const fetchClaudeQuota = async (
   const result = usageResult.value;
 
   if (result.statusCode < 200 || result.statusCode >= 300) {
-    throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
+    throw createStatusError(getApiCallErrorMessage(result), result.statusCode, result.bodyText);
   }
 
   const payload = parseClaudeUsagePayload(result.body ?? result.bodyText);
@@ -1026,7 +1059,13 @@ const fetchClaudeQuota = async (
         )
       : null;
 
-  return { windows, extraUsage: payload.extra_usage, planType };
+  const profileSearchText =
+    profileResult.status === 'fulfilled' ? profileResult.value.bodyText : '';
+
+  return {
+    data: { windows, extraUsage: payload.extra_usage, planType },
+    searchText: [result.bodyText, profileSearchText].filter(Boolean).join('\n'),
+  };
 };
 
 const renderClaudeItems = (
@@ -1117,15 +1156,17 @@ export const CLAUDE_CONFIG: QuotaConfig<
   storeSelector: (state) => state.claudeQuota,
   storeSetter: 'setClaudeQuota',
   buildLoadingState: () => ({ status: 'loading', windows: [] }),
-  buildSuccessState: (data) => ({
+  buildSuccessState: ({ data, searchText }) => ({
     status: 'success',
     windows: data.windows,
     extraUsage: data.extraUsage,
     planType: data.planType,
+    searchText,
   }),
-  buildErrorState: (message, status) => ({
+  buildErrorState: (message, status, searchText) => ({
     status: 'error',
     windows: [],
+    searchText,
     error: message,
     errorStatus: status,
   }),
@@ -1145,10 +1186,15 @@ export const ANTIGRAVITY_CONFIG: QuotaConfig<AntigravityQuotaState, AntigravityQ
   storeSelector: (state) => state.antigravityQuota,
   storeSetter: 'setAntigravityQuota',
   buildLoadingState: () => ({ status: 'loading', groups: [] }),
-  buildSuccessState: (groups) => ({ status: 'success', groups }),
-  buildErrorState: (message, status) => ({
+  buildSuccessState: ({ data, searchText }) => ({
+    status: 'success',
+    groups: data,
+    searchText,
+  }),
+  buildErrorState: (message, status, searchText) => ({
     status: 'error',
     groups: [],
+    searchText,
     error: message,
     errorStatus: status,
   }),
@@ -1171,14 +1217,16 @@ export const CODEX_CONFIG: QuotaConfig<
   storeSelector: (state) => state.codexQuota,
   storeSetter: 'setCodexQuota',
   buildLoadingState: () => ({ status: 'loading', windows: [] }),
-  buildSuccessState: (data) => ({
+  buildSuccessState: ({ data, searchText }) => ({
     status: 'success',
     windows: data.windows,
     planType: data.planType,
+    searchText,
   }),
-  buildErrorState: (message, status) => ({
+  buildErrorState: (message, status, searchText) => ({
     status: 'error',
     windows: [],
+    searchText,
     error: message,
     errorStatus: status,
   }),
@@ -1208,7 +1256,7 @@ export const GEMINI_CLI_CONFIG: QuotaConfig<
   storeSelector: (state) => state.geminiCliQuota,
   storeSetter: 'setGeminiCliQuota',
   buildLoadingState: () => ({ status: 'loading', buckets: [], tierLabel: null, tierId: null, creditBalance: null }),
-  buildSuccessState: (data) => {
+  buildSuccessState: ({ data, searchText }) => {
     const supplementarySnapshot = readGeminiCliSupplementarySnapshot(
       data.fileName,
       data.supplementaryRequestId
@@ -1220,11 +1268,13 @@ export const GEMINI_CLI_CONFIG: QuotaConfig<
       tierLabel: supplementarySnapshot.tierLabel ?? data.tierLabel,
       tierId: supplementarySnapshot.tierId ?? data.tierId,
       creditBalance: supplementarySnapshot.creditBalance ?? data.creditBalance,
+      searchText,
     };
   },
-  buildErrorState: (message, status) => ({
+  buildErrorState: (message, status, searchText) => ({
     status: 'error',
     buckets: [],
+    searchText,
     error: message,
     errorStatus: status,
   }),
@@ -1238,7 +1288,7 @@ export const GEMINI_CLI_CONFIG: QuotaConfig<
 const fetchKimiQuota = async (
   file: AuthFileItem,
   t: TFunction
-): Promise<KimiQuotaRow[]> => {
+): Promise<QuotaFetchResult<KimiQuotaRow[]>> => {
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
@@ -1253,7 +1303,7 @@ const fetchKimiQuota = async (
   }, QUOTA_REQUEST_CONFIG);
 
   if (result.statusCode < 200 || result.statusCode >= 300) {
-    throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
+    throw createStatusError(getApiCallErrorMessage(result), result.statusCode, result.bodyText);
   }
 
   const payload = parseKimiUsagePayload(result.body ?? result.bodyText);
@@ -1261,7 +1311,10 @@ const fetchKimiQuota = async (
     throw new Error(t('kimi_quota.empty_data'));
   }
 
-  return buildKimiQuotaRows(payload);
+  return {
+    data: buildKimiQuotaRows(payload),
+    searchText: result.bodyText,
+  };
 };
 
 const renderKimiItems = (
@@ -1329,10 +1382,15 @@ export const KIMI_CONFIG: QuotaConfig<KimiQuotaState, KimiQuotaRow[]> = {
   storeSelector: (state) => state.kimiQuota,
   storeSetter: 'setKimiQuota',
   buildLoadingState: () => ({ status: 'loading', rows: [] }),
-  buildSuccessState: (rows) => ({ status: 'success', rows }),
-  buildErrorState: (message, status) => ({
+  buildSuccessState: ({ data, searchText }) => ({
+    status: 'success',
+    rows: data,
+    searchText,
+  }),
+  buildErrorState: (message, status, searchText) => ({
     status: 'error',
     rows: [],
+    searchText,
     error: message,
     errorStatus: status,
   }),

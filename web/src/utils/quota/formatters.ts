@@ -46,10 +46,17 @@ export function formatCodexResetLabel(window?: CodexUsageWindow | null): string 
   return '-';
 }
 
-export function createStatusError(message: string, status?: number): Error & { status?: number } {
-  const error = new Error(message) as Error & { status?: number };
+export function createStatusError(
+  message: string,
+  status?: number,
+  searchText?: string
+): Error & { status?: number; searchText?: string } {
+  const error = new Error(message) as Error & { status?: number; searchText?: string };
   if (status !== undefined) {
     error.status = status;
+  }
+  if (typeof searchText === 'string' && searchText.trim()) {
+    error.searchText = searchText;
   }
   return error;
 }
@@ -65,6 +72,21 @@ export function getStatusFromError(err: unknown): number | undefined {
       return asNumber;
     }
   }
+  return undefined;
+}
+
+export function getSearchTextFromError(err: unknown): string | undefined {
+  if (typeof err === 'object' && err !== null && 'searchText' in err) {
+    const rawSearchText = (err as { searchText?: unknown }).searchText;
+    if (typeof rawSearchText === 'string' && rawSearchText.trim()) {
+      return rawSearchText;
+    }
+  }
+
+  if (err instanceof Error && err.message.trim()) {
+    return err.message;
+  }
+
   return undefined;
 }
 

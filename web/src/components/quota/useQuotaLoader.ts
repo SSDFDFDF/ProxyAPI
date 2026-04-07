@@ -8,8 +8,8 @@ import type { AuthFileItem } from '@/types';
 import { useQuotaStore } from '@/stores';
 import { QUOTA_REFRESH_CONCURRENCY } from '@/utils/constants';
 import { mapWithConcurrencyLimit } from '@/utils/async';
-import { getStatusFromError } from '@/utils/quota';
-import type { QuotaConfig } from './quotaConfigs';
+import { getSearchTextFromError, getStatusFromError } from '@/utils/quota';
+import type { QuotaConfig, QuotaFetchResult } from './quotaConfigs';
 
 type QuotaScope = 'page' | 'all';
 
@@ -20,9 +20,10 @@ type QuotaSetter<T> = (updater: QuotaUpdater<T>) => void;
 interface LoadQuotaResult<TData> {
   name: string;
   status: 'success' | 'error';
-  data?: TData;
+  data?: QuotaFetchResult<TData>;
   error?: string;
   errorStatus?: number;
+  searchText?: string;
 }
 
 export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>) {
@@ -67,7 +68,13 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
             } catch (err: unknown) {
               const message = err instanceof Error ? err.message : t('common.unknown_error');
               const errorStatus = getStatusFromError(err);
-              return { name: file.name, status: 'error', error: message, errorStatus };
+              return {
+                name: file.name,
+                status: 'error',
+                error: message,
+                errorStatus,
+                searchText: getSearchTextFromError(err) ?? message,
+              };
             }
           }
         );
@@ -78,11 +85,14 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
           const nextState = { ...prev };
           results.forEach((result) => {
             if (result.status === 'success') {
-              nextState[result.name] = config.buildSuccessState(result.data as TData);
+              nextState[result.name] = config.buildSuccessState(
+                result.data as QuotaFetchResult<TData>
+              );
             } else {
               nextState[result.name] = config.buildErrorState(
                 result.error || t('common.unknown_error'),
-                result.errorStatus
+                result.errorStatus,
+                result.searchText
               );
             }
           });

@@ -4,10 +4,11 @@
 
 import { useCallback, type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/Button';
 import { PageFilterSection } from '@/components/ui/PageFilterSection';
 import { FilterTabs, type FilterTabItem } from '@/components/ui/FilterTabs';
-import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { PageTitleBlock } from '@/components/ui/PageTitleBlock';
+import { IconEye, IconEyeOff } from '@/components/ui/icons';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useAuthStore, useThemeStore } from '@/stores';
 import { authFilesApi, configFileApi } from '@/services/api';
@@ -17,7 +18,7 @@ import {
   CLAUDE_CONFIG,
   CODEX_CONFIG,
   GEMINI_CLI_CONFIG,
-  KIMI_CONFIG
+  KIMI_CONFIG,
 } from '@/components/quota';
 import type { AuthFileItem } from '@/types';
 import {
@@ -57,7 +58,9 @@ export function QuotaPage() {
     () =>
       QUOTA_TABS.map((tab) => ({
         ...tab,
-        count: files.filter((file) => shouldIncludeInQuota(file, includeDisabled, tab.config.matchesFile)).length,
+        count: files.filter((file) =>
+          shouldIncludeInQuota(file, includeDisabled, tab.config.matchesFile)
+        ).length,
       })),
     [files, includeDisabled]
   );
@@ -131,23 +134,37 @@ export function QuotaPage() {
 
   return (
     <div className={styles.container}>
-      <PageTitleBlock
-        title={t('quota_management.title')}
-        description={t('quota_management.description')}
-        count={files.length}
-      />
+      <div className={styles.pageHeader}>
+        <PageTitleBlock
+          title={t('quota_management.title')}
+          description={t('quota_management.description')}
+          count={files.length}
+          className={styles.pageHeaderCopy}
+        />
+
+        <div className={styles.pageHeaderActions}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setIncludeDisabled((prev) => !prev)}
+            className={`${styles.includeDisabledButton} ${
+              includeDisabled ? styles.includeDisabledButtonActive : ''
+            }`}
+            aria-pressed={includeDisabled}
+            title={t('quota_management.include_disabled')}
+          >
+            <>
+              {includeDisabled ? <IconEye size={16} /> : <IconEyeOff size={16} />}
+              {t('quota_management.include_disabled')}
+            </>
+          </Button>
+        </div>
+      </div>
 
       {error && <div className={styles.errorBox}>{error}</div>}
 
       <PageFilterSection className={styles.filterSection}>
         <FilterTabs items={quotaTabItems} />
-        <ToggleSwitch
-          checked={includeDisabled}
-          onChange={setIncludeDisabled}
-          label={t('quota_management.include_disabled')}
-          ariaLabel={t('quota_management.include_disabled')}
-          labelPosition="left"
-        />
       </PageFilterSection>
 
       {activeConfig && (

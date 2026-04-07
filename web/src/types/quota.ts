@@ -189,6 +189,7 @@ export interface ClaudeQuotaState {
   windows: ClaudeQuotaWindow[];
   extraUsage?: ClaudeExtraUsage | null;
   planType?: string | null;
+  searchText?: string;
   error?: string;
   errorStatus?: number;
 }
@@ -205,6 +206,7 @@ export interface AntigravityQuotaGroup {
 export interface AntigravityQuotaState {
   status: 'idle' | 'loading' | 'success' | 'error';
   groups: AntigravityQuotaGroup[];
+  searchText?: string;
   error?: string;
   errorStatus?: number;
 }
@@ -225,6 +227,7 @@ export interface GeminiCliQuotaState {
   tierLabel?: string | null;
   tierId?: string | null;
   creditBalance?: number | null;
+  searchText?: string;
   error?: string;
   errorStatus?: number;
 }
@@ -242,6 +245,7 @@ export interface CodexQuotaState {
   status: 'idle' | 'loading' | 'success' | 'error';
   windows: CodexQuotaWindow[];
   planType?: string | null;
+  searchText?: string;
   error?: string;
   errorStatus?: number;
 }
@@ -303,6 +307,7 @@ export interface KimiQuotaRow {
 export interface KimiQuotaState {
   status: 'idle' | 'loading' | 'success' | 'error';
   rows: KimiQuotaRow[];
+  searchText?: string;
   error?: string;
   errorStatus?: number;
 }

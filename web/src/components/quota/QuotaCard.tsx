@@ -13,6 +13,7 @@ type QuotaStatus = 'idle' | 'loading' | 'success' | 'error';
 
 export interface QuotaStatusState {
   status: QuotaStatus;
+  searchText?: string;
   error?: string;
   errorStatus?: number;
 }

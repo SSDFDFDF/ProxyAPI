@@ -25,6 +25,8 @@ import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import {
   IconDownload,
+  IconEye,
+  IconEyeOff,
   IconFilterAll,
   IconInfo,
   IconModelCluster,
@@ -82,7 +84,7 @@ import {
 } from '@/features/authFiles/uiState';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
 import { useQuotaStore } from '@/stores/useQuotaStore';
-import { resolveAuthProvider, formatQuotaResetTime } from '@/utils/quota';
+import { formatQuotaResetTime, isDisabledAuthFile, resolveAuthProvider } from '@/utils/quota';
 import { applyAuthFileEditableValues } from '@/features/authFiles/authFileEditor';
 import type {
   AntigravityQuotaState,
@@ -118,6 +120,12 @@ type QuotaSummaryItem = {
   actionable?: boolean;
 };
 
+type SearchableQuotaState = {
+  searchText?: string;
+  error?: string;
+  errorStatus?: number;
+};
+
 const escapeWildcardSearchSegment = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const buildWildcardSearch = (value: string): RegExp | null => {
@@ -144,6 +152,13 @@ const getAuthFileSearchValues = (item: AuthFileItem): string[] => {
     .map((value) => (value == null ? '' : String(value)))
     .filter((value) => value.length > 0);
 };
+
+const getQuotaSearchTextValues = (quota: SearchableQuotaState | undefined): string[] =>
+  [
+    quota?.searchText,
+    quota?.error,
+    quota?.errorStatus == null ? '' : String(quota.errorStatus),
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
 
 export function AuthFilesPage() {
   const { t } = useTranslation();
@@ -176,6 +191,7 @@ export function AuthFilesPage() {
   const [batchFieldsSaving, setBatchFieldsSaving] = useState(false);
   const [batchFields, setBatchFields] =
     useState<BatchAuthFileFieldsState>(INITIAL_BATCH_FIELD_STATE);
+  const [includeDisabledQuota, setIncludeDisabledQuota] = useState(false);
   const [uiStateHydrated, setUiStateHydrated] = useState(false);
   const floatingBatchActionsRef = useRef<HTMLDivElement>(null);
   const batchActionAnimationRef = useRef<AnimationPlaybackControlsWithThen | null>(null);
@@ -435,6 +451,31 @@ export function AuthFilesPage() {
     [t]
   );
 
+  const getQuotaSearchValues = useCallback(
+    (item: AuthFileItem): string[] => {
+      const provider = resolveAuthProvider(item);
+
+      if (provider === 'antigravity') {
+        return getQuotaSearchTextValues(antigravityQuota[item.name]);
+      }
+      if (provider === 'claude') {
+        return getQuotaSearchTextValues(claudeQuota[item.name]);
+      }
+      if (provider === 'codex') {
+        return getQuotaSearchTextValues(codexQuota[item.name]);
+      }
+      if (provider === 'gemini-cli') {
+        return getQuotaSearchTextValues(geminiCliQuota[item.name]);
+      }
+      if (provider === 'kimi') {
+        return getQuotaSearchTextValues(kimiQuota[item.name]);
+      }
+
+      return [];
+    },
+    [antigravityQuota, claudeQuota, codexQuota, geminiCliQuota, kimiQuota]
+  );
+
   const typeCounts = useMemo(() => {
     const counts: Record<string, number> = { all: filesMatchingProblemFilter.length };
     filesMatchingProblemFilter.forEach((file) => {
@@ -471,14 +512,21 @@ export function AuthFilesPage() {
 
       const matchSearch =
         !normalizedSearch ||
-        getAuthFileSearchValues(item).some((content) =>
+        [...getAuthFileSearchValues(item), ...getQuotaSearchValues(item)].some((content) =>
           wildcardSearch
             ? wildcardSearch.test(content)
             : content.toLowerCase().includes(normalizedTerm)
         );
       return matchType && matchStatus && matchSearch;
     });
-  }, [filesMatchingProblemFilter, filter, statusFilter, normalizedSearch, wildcardSearch]);
+  }, [
+    filesMatchingProblemFilter,
+    filter,
+    getQuotaSearchValues,
+    normalizedSearch,
+    statusFilter,
+    wildcardSearch,
+  ]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
@@ -517,11 +565,16 @@ export function AuthFilesPage() {
   const selectedNames = useMemo(() => Array.from(selectedFiles), [selectedFiles]);
   const fileMap = useMemo(() => new Map(files.map((file) => [file.name, file])), [files]);
   const selectedQuotaTargets = useMemo(
-    () =>
-      selectedNames
+    () => {
+      const existingFiles = selectedNames
         .map((name) => fileMap.get(name))
-        .filter((file): file is NonNullable<typeof file> => Boolean(file)),
-    [fileMap, selectedNames]
+        .filter((file): file is AuthFileItem => Boolean(file));
+
+      return existingFiles.filter(
+        (file) => !isRuntimeOnlyAuthFile(file) && (includeDisabledQuota || !isDisabledAuthFile(file))
+      );
+    },
+    [fileMap, includeDisabledQuota, selectedNames]
   );
   const selectedHasStatusUpdating = useMemo(
     () => selectedNames.some((name) => statusUpdating[name] === true),
@@ -736,7 +789,13 @@ export function AuthFilesPage() {
 
   const handleSingleQuotaRefresh = useCallback(
     async (file: (typeof pageItems)[number]) => {
-      if (disableControls || file.disabled || isRuntimeOnlyAuthFile(file)) return;
+      if (
+        disableControls ||
+        isRuntimeOnlyAuthFile(file) ||
+        (!includeDisabledQuota && isDisabledAuthFile(file))
+      ) {
+        return;
+      }
       if (quotaRefreshingNames[file.name]) return;
 
       setQuotaRefreshingNames((prev) => ({ ...prev, [file.name]: true }));
@@ -762,7 +821,7 @@ export function AuthFilesPage() {
         });
       }
     },
-    [disableControls, quotaRefreshingNames, showNotification, t]
+    [disableControls, includeDisabledQuota, quotaRefreshingNames, showNotification, t]
   );
 
   const copyTextWithNotification = useCallback(
@@ -947,7 +1006,8 @@ export function AuthFilesPage() {
 
   const resolveQuotaSummary = useCallback(
     (file: (typeof pageItems)[number]): QuotaSummaryItem[] | null => {
-      if (isRuntimeOnlyAuthFile(file) || file.disabled) return null;
+      if (isRuntimeOnlyAuthFile(file)) return null;
+      if (!includeDisabledQuota && isDisabledAuthFile(file)) return null;
 
       const provider = resolveAuthProvider(file);
       const summaryFromStatus = (
@@ -1079,7 +1139,7 @@ export function AuthFilesPage() {
 
       return null;
     },
-    [antigravityQuota, claudeQuota, codexQuota, geminiCliQuota, kimiQuota, t]
+    [antigravityQuota, claudeQuota, codexQuota, geminiCliQuota, includeDisabledQuota, kimiQuota, t]
   );
 
   const renderCompactList = () => (
@@ -1365,6 +1425,21 @@ export function AuthFilesPage() {
         />
 
         <div className={styles.headerActions}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setIncludeDisabledQuota((prev) => !prev)}
+            className={`${styles.includeDisabledButton} ${
+              includeDisabledQuota ? styles.includeDisabledButtonActive : ''
+            }`}
+            aria-pressed={includeDisabledQuota}
+            title={t('quota_management.include_disabled')}
+          >
+            <>
+              {includeDisabledQuota ? <IconEye size={16} /> : <IconEyeOff size={16} />}
+              {t('quota_management.include_disabled')}
+            </>
+          </Button>
           <Button variant="secondary" size="sm" onClick={handleHeaderRefresh} disabled={loading}>
             {t('common.refresh')}
           </Button>
@@ -1527,6 +1602,7 @@ export function AuthFilesPage() {
                     selected={selectedFiles.has(file.name)}
                     resolvedTheme={resolvedTheme}
                     disableControls={disableControls}
+                    includeDisabledQuota={includeDisabledQuota}
                     deleting={deleting}
                     statusUpdating={statusUpdating}
                     quotaFilterType={quotaFilterType}

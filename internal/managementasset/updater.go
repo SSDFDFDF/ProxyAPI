@@ -56,7 +56,7 @@ func SetCurrentConfig(cfg *config.Config) {
 
 // StartAutoUpdater launches a background goroutine that periodically checks for remote management asset updates.
 // Remote updates only run when a custom panel-github-repository is configured and auto-update is not disabled.
-// Otherwise the embedded (compiled-in) asset is used as-is.
+// The embedded (compiled-in) asset is refreshed onto disk whenever it differs from the cached file.
 func StartAutoUpdater(ctx context.Context, configFilePath string) {
 	configFilePath = strings.TrimSpace(configFilePath)
 	if configFilePath == "" {
@@ -93,14 +93,20 @@ func runAutoUpdater(ctx context.Context) {
 			log.Debug("management asset auto-updater skipped: disable-auto-update-panel is enabled")
 			return
 		}
+		configPath, _ := schedulerConfigPath.Load().(string)
+		staticDir := StaticDir(configPath)
+		if staticDir == "" {
+			log.Debug("management asset auto-updater skipped: empty static directory")
+			return
+		}
+		ensureEmbeddedAsset(staticDir)
+
 		repo := strings.TrimSpace(cfg.RemoteManagement.PanelGitHubRepository)
 		if repo == "" {
 			log.Debug("management asset auto-updater skipped: no custom panel repository configured")
 			return
 		}
 
-		configPath, _ := schedulerConfigPath.Load().(string)
-		staticDir := StaticDir(configPath)
 		updateManagementHTMLFromRemote(ctx, staticDir, proxycfg.ResolveScopeProxyURL(cfg, proxycfg.ScopeDefault), repo)
 	}
 
@@ -182,16 +188,23 @@ func FilePath(configFilePath string) string {
 	return filepath.Join(dir, ManagementFileName)
 }
 
-// ensureEmbeddedAsset writes the compiled-in embedded management.html to disk if no local copy exists.
+// ensureEmbeddedAsset writes the compiled-in embedded management.html to disk when missing or stale.
 func ensureEmbeddedAsset(staticDir string) bool {
 	if len(embeddedManagementHTML) == 0 {
 		return false
 	}
 
 	localPath := filepath.Join(staticDir, managementAssetName)
+	embeddedSum := sha256.Sum256(embeddedManagementHTML)
+	embeddedHash := hex.EncodeToString(embeddedSum[:])
 
-	if _, err := os.Stat(localPath); err == nil {
-		return true
+	if localHash, err := fileSHA256(localPath); err == nil {
+		if strings.EqualFold(localHash, embeddedHash) {
+			return true
+		}
+		log.Infof("embedded management asset differs from cached file; refreshing disk copy (embedded=%s, local=%s)", embeddedHash, localHash)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		log.WithError(err).Warn("failed to read cached management asset hash")
 	}
 
 	if err := os.MkdirAll(staticDir, 0o755); err != nil {
@@ -204,8 +217,7 @@ func ensureEmbeddedAsset(staticDir string) bool {
 		return false
 	}
 
-	sum := sha256.Sum256(embeddedManagementHTML)
-	log.Infof("embedded management asset written to disk (hash=%s)", hex.EncodeToString(sum[:]))
+	log.Infof("embedded management asset written to disk (hash=%s)", embeddedHash)
 	return true
 }
 

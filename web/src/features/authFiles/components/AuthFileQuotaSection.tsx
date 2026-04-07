@@ -1,15 +1,13 @@
 import { useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  getQuotaConfigByType,
-  refreshQuotaForFiles,
-} from '@/components/quota';
+import { getQuotaConfigByType, refreshQuotaForFiles } from '@/components/quota';
 import { useNotificationStore, useQuotaStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
+import { isDisabledAuthFile } from '@/utils/quota';
 import {
   isRuntimeOnlyAuthFile,
   resolveQuotaErrorMessage,
-  type QuotaProviderType
+  type QuotaProviderType,
 } from '@/features/authFiles/constants';
 import { QuotaProgressBar } from '@/features/authFiles/components/QuotaProgressBar';
 import styles from '@/pages/AuthFilesPage.module.scss';
@@ -20,10 +18,11 @@ export type AuthFileQuotaSectionProps = {
   file: AuthFileItem;
   quotaType: QuotaProviderType;
   disableControls: boolean;
+  includeDisabled?: boolean;
 };
 
 export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
-  const { file, quotaType, disableControls } = props;
+  const { file, quotaType, disableControls, includeDisabled = false } = props;
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
 
@@ -35,11 +34,12 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
     return state.geminiCliQuota[file.name] as QuotaState;
   });
   const config = getQuotaConfigByType(quotaType);
+  const isDisabled = isDisabledAuthFile(file);
 
   const refreshQuotaForFile = useCallback(async () => {
     if (disableControls) return;
     if (isRuntimeOnlyAuthFile(file)) return;
-    if (file.disabled) return;
+    if (!includeDisabled && isDisabled) return;
     if (quota?.status === 'loading') return;
     const [result] = await refreshQuotaForFiles([file], t);
     if (!result || result.status === 'skipped') return;
@@ -54,12 +54,12 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
       }),
       'error'
     );
-  }, [disableControls, file, quota?.status, showNotification, t]);
+  }, [disableControls, file, includeDisabled, isDisabled, quota?.status, showNotification, t]);
 
   if (!config) return null;
 
   const quotaStatus = quota?.status ?? 'idle';
-  const canRefreshQuota = !disableControls && !file.disabled;
+  const canRefreshQuota = !disableControls && (includeDisabled || !isDisabled);
   const quotaErrorMessage = resolveQuotaErrorMessage(
     t,
     quota?.errorStatus,
