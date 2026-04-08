@@ -40,6 +40,26 @@ export const STORAGE_KEY_THEME = 'cli-proxy-theme';
 export const STORAGE_KEY_LANGUAGE = 'cli-proxy-language';
 export const STORAGE_KEY_SIDEBAR = 'cli-proxy-sidebar-collapsed';
 export const STORAGE_KEY_AUTH_FILES_PAGE_SIZE = 'cli-proxy-auth-files-page-size';
+export const STORAGE_KEY_QUOTA_CACHE = 'cli-proxy-quota-cache';
+export const STORAGE_KEY_SERVER_STATE_AUTH_FILES = 'cli-proxy-server-state-auth-files';
+export const STORAGE_KEY_SERVER_STATE_OAUTH_EXCLUDED = 'cli-proxy-server-state-oauth-excluded';
+export const STORAGE_KEY_SERVER_STATE_OAUTH_MODEL_ALIAS = 'cli-proxy-server-state-oauth-model-alias';
+export const STORAGE_KEY_SERVER_STATE_CONFIG = 'cli-proxy-server-state-config';
+export const STORAGE_KEY_SERVER_STATE_USAGE = 'cli-proxy-server-state-usage';
+export const STORAGE_KEY_SERVER_STATE_MODELS = 'cli-proxy-server-state-models';
+export const STORAGE_KEY_SERVER_STATE_PROVIDER_MODELS = 'cli-proxy-server-state-provider-models';
+export const STORAGE_KEY_SERVER_STATE_SCHEMA_VERSION = 'cli-proxy-server-state-schema-version';
+export const PERSISTED_SERVER_STATE_STORAGE_KEYS = [
+  STORAGE_KEY_SERVER_STATE_CONFIG,
+  STORAGE_KEY_SERVER_STATE_USAGE,
+  STORAGE_KEY_SERVER_STATE_MODELS,
+  STORAGE_KEY_SERVER_STATE_AUTH_FILES,
+  STORAGE_KEY_SERVER_STATE_OAUTH_EXCLUDED,
+  STORAGE_KEY_SERVER_STATE_OAUTH_MODEL_ALIAS,
+  STORAGE_KEY_SERVER_STATE_PROVIDER_MODELS,
+  STORAGE_KEY_QUOTA_CACHE
+] as const;
+export const SERVER_STATE_PERSIST_MAX_SCOPES = 3;
 
 // 语言配置
 export const LANGUAGE_ORDER = defineLanguageOrder(['zh-CN', 'en', 'ru'] as const);

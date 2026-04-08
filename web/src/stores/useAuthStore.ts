@@ -6,7 +6,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { AuthState, LoginCredentials, ConnectionStatus } from '@/types';
-import { STORAGE_KEY_AUTH } from '@/utils/constants';
+import {
+  PERSISTED_SERVER_STATE_STORAGE_KEYS,
+  STORAGE_KEY_AUTH,
+  STORAGE_KEY_SERVER_STATE_SCHEMA_VERSION,
+} from '@/utils/constants';
 import { obfuscatedStorage } from '@/services/storage/secureStorage';
 import { apiClient } from '@/services/api/client';
 import { buildConfigScopeKey, useConfigStore } from './useConfigStore';
@@ -32,6 +36,40 @@ interface AuthStoreState extends AuthState {
 }
 
 let restoreSessionPromise: Promise<boolean> | null = null;
+const SERVER_STATE_SCHEMA_VERSION = 2;
+
+export const clearAllPersistedServerState = () => {
+  PERSISTED_SERVER_STATE_STORAGE_KEYS.forEach((key) => {
+    obfuscatedStorage.removeItem(key);
+  });
+  obfuscatedStorage.removeItem(STORAGE_KEY_SERVER_STATE_SCHEMA_VERSION);
+};
+
+const clearNonConfigRuntimeServerState = () => {
+  useUsageStatsStore.getState().clearUsageStats();
+  useModelsStore.getState().clearCache();
+  useQuotaStore.getState().clearQuotaCache();
+  useAuthFilesStore.getState().clearAuthFiles();
+  useAuthFilesOauthStore.getState().clearOauthState();
+  useProviderModelDefinitionsStore.getState().clearProviderModels();
+};
+
+const clearAllRuntimeServerState = () => {
+  useConfigStore.getState().clearCache();
+  clearNonConfigRuntimeServerState();
+};
+
+const migratePersistedServerState = () => {
+  const storedVersion = obfuscatedStorage.getItem<number>(STORAGE_KEY_SERVER_STATE_SCHEMA_VERSION, {
+    obfuscate: false,
+  });
+  if (storedVersion === SERVER_STATE_SCHEMA_VERSION) return;
+
+  clearAllPersistedServerState();
+  obfuscatedStorage.setItem(STORAGE_KEY_SERVER_STATE_SCHEMA_VERSION, SERVER_STATE_SCHEMA_VERSION, {
+    obfuscate: false,
+  });
+};
 
 export const useAuthStore = create<AuthStoreState>()(
   persist(
@@ -50,6 +88,7 @@ export const useAuthStore = create<AuthStoreState>()(
       restoreSession: () => {
         if (restoreSessionPromise) return restoreSessionPromise;
 
+        migratePersistedServerState();
         restoreSessionPromise = (async () => {
           const wasLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
           const { apiBase, managementKey, rememberPassword } = get();
@@ -91,12 +130,6 @@ export const useAuthStore = create<AuthStoreState>()(
 
         try {
           set({ connectionStatus: 'connecting' });
-          useUsageStatsStore.getState().clearUsageStats();
-          useModelsStore.getState().clearCache();
-          useQuotaStore.getState().clearQuotaCache();
-          useAuthFilesStore.getState().clearAuthFiles();
-          useAuthFilesOauthStore.getState().clearOauthState();
-          useProviderModelDefinitionsStore.getState().clearProviderModels();
 
           // 配置 API 客户端
           apiClient.setConfig({
@@ -111,6 +144,8 @@ export const useAuthStore = create<AuthStoreState>()(
             forceRefresh: true,
             scopeKey: nextScopeKey
           });
+
+          clearNonConfigRuntimeServerState();
 
           // 登录成功
           set({
@@ -144,13 +179,8 @@ export const useAuthStore = create<AuthStoreState>()(
       // 登出
       logout: () => {
         restoreSessionPromise = null;
-        useConfigStore.getState().clearCache();
-        useUsageStatsStore.getState().clearUsageStats();
-        useModelsStore.getState().clearCache();
-        useQuotaStore.getState().clearQuotaCache();
-        useAuthFilesStore.getState().clearAuthFiles();
-        useAuthFilesOauthStore.getState().clearOauthState();
-        useProviderModelDefinitionsStore.getState().clearProviderModels();
+        clearAllRuntimeServerState();
+        clearAllPersistedServerState();
         set({
           isAuthenticated: false,
           apiBase: '',

@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import type { Config } from '@/types';
 import type { RawConfigSection } from '@/types/config';
 import { configApi } from '@/services/api/config';
-import { CACHE_EXPIRY_MS } from '@/utils/constants';
+import { CACHE_EXPIRY_MS, STORAGE_KEY_SERVER_STATE_CONFIG } from '@/utils/constants';
 import { ScopedQueryCache } from './serverState/scopedQueryCache';
 import { buildSessionScopeKey, getCurrentSessionScopeKey } from './serverState/sessionScope';
 
@@ -43,7 +43,7 @@ interface ConfigState {
 
 let configRequestToken = 0;
 const FULL_CONFIG_QUERY_KEY = '__full__';
-const configCache = new ScopedQueryCache<unknown>();
+const configCache = new ScopedQueryCache<unknown>(STORAGE_KEY_SERVER_STATE_CONFIG);
 
 const SECTION_KEYS: RawConfigSection[] = [
   'debug',

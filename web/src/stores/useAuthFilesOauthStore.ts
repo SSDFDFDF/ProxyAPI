@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { authFilesApi } from '@/services/api';
-import { CACHE_EXPIRY_MS } from '@/utils/constants';
+import {
+  CACHE_EXPIRY_MS,
+  STORAGE_KEY_SERVER_STATE_OAUTH_EXCLUDED,
+  STORAGE_KEY_SERVER_STATE_OAUTH_MODEL_ALIAS,
+} from '@/utils/constants';
 import type { OAuthModelAliasEntry } from '@/types';
 import { ScopedQueryCache } from './serverState/scopedQueryCache';
 import { getCurrentSessionScopeKey } from './serverState/sessionScope';
@@ -70,8 +74,10 @@ type AuthFilesOauthState = {
 const OAUTH_EXCLUDED_QUERY_KEY = 'oauth-excluded-models';
 const OAUTH_MODEL_ALIAS_QUERY_KEY = 'oauth-model-alias';
 
-const excludedCache = new ScopedQueryCache<OauthExcludedSnapshot>();
-const modelAliasCache = new ScopedQueryCache<OauthModelAliasSnapshot>();
+const excludedCache = new ScopedQueryCache<OauthExcludedSnapshot>(STORAGE_KEY_SERVER_STATE_OAUTH_EXCLUDED);
+const modelAliasCache = new ScopedQueryCache<OauthModelAliasSnapshot>(
+  STORAGE_KEY_SERVER_STATE_OAUTH_MODEL_ALIAS
+);
 
 let oauthExcludedRequestToken = 0;
 let oauthModelAliasRequestToken = 0;

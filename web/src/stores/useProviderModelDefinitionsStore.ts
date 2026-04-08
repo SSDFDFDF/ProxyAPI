@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { authFilesApi } from '@/services/api';
-import { CACHE_EXPIRY_MS } from '@/utils/constants';
+import { CACHE_EXPIRY_MS, STORAGE_KEY_SERVER_STATE_PROVIDER_MODELS } from '@/utils/constants';
 import type { AuthFileModelItem } from '@/features/authFiles/constants';
 import { ScopedQueryCache } from './serverState/scopedQueryCache';
 import { getCurrentSessionScopeKey } from './serverState/sessionScope';
@@ -29,7 +29,9 @@ type ProviderModelDefinitionsState = {
   clearProviderModels: () => void;
 };
 
-const providerModelDefinitionsCache = new ScopedQueryCache<ProviderModelsSnapshot>();
+const providerModelDefinitionsCache = new ScopedQueryCache<ProviderModelsSnapshot>(
+  STORAGE_KEY_SERVER_STATE_PROVIDER_MODELS
+);
 const providerModelsRequestTokens = new Map<string, number>();
 
 const normalizeProvider = (value: string) => String(value ?? '').trim().toLowerCase();

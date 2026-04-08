@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { authFilesApi } from '@/services/api';
-import { CACHE_EXPIRY_MS } from '@/utils/constants';
+import { CACHE_EXPIRY_MS, STORAGE_KEY_SERVER_STATE_AUTH_FILES } from '@/utils/constants';
 import type { AuthFileItem } from '@/types';
 import { ScopedQueryCache } from './serverState/scopedQueryCache';
 import { getCurrentSessionScopeKey } from './serverState/sessionScope';
@@ -31,7 +31,7 @@ type AuthFilesState = {
 };
 
 const AUTH_FILES_QUERY_KEY = 'list';
-const authFilesCache = new ScopedQueryCache<AuthFilesSnapshot>();
+const authFilesCache = new ScopedQueryCache<AuthFilesSnapshot>(STORAGE_KEY_SERVER_STATE_AUTH_FILES);
 
 let authFilesRequestToken = 0;
 

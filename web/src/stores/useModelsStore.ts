@@ -4,7 +4,7 @@
 
 import { create } from 'zustand';
 import { modelsApi } from '@/services/api/models';
-import { CACHE_EXPIRY_MS } from '@/utils/constants';
+import { CACHE_EXPIRY_MS, STORAGE_KEY_SERVER_STATE_MODELS } from '@/utils/constants';
 import type { ModelInfo } from '@/utils/models';
 import { ScopedQueryCache } from './serverState/scopedQueryCache';
 import { getCurrentSessionScopeKey } from './serverState/sessionScope';
@@ -21,7 +21,7 @@ interface ModelsState {
 }
 
 let modelsRequestToken = 0;
-const modelsCache = new ScopedQueryCache<ModelInfo[]>();
+const modelsCache = new ScopedQueryCache<ModelInfo[]>(STORAGE_KEY_SERVER_STATE_MODELS);
 
 const buildModelsQueryKey = (apiBase: string, apiKey: string) =>
   JSON.stringify({ apiBase, apiKey });

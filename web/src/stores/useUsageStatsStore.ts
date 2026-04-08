@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { usageApi } from '@/services/api';
+import { STORAGE_KEY_SERVER_STATE_USAGE } from '@/utils/constants';
 import { collectUsageDetails, computeKeyStatsFromDetails, type KeyStats, type UsageDetail } from '@/utils/usage';
 import i18n from '@/i18n';
 import { ScopedQueryCache } from './serverState/scopedQueryCache';
@@ -43,7 +44,7 @@ const createEmptyUsageState = (scopeKey: string = '') => ({
 
 let usageRequestToken = 0;
 const USAGE_QUERY_KEY = 'usage';
-const usageCache = new ScopedQueryCache<UsageCacheSnapshot>();
+const usageCache = new ScopedQueryCache<UsageCacheSnapshot>(STORAGE_KEY_SERVER_STATE_USAGE);
 
 const getErrorMessage = (error: unknown) =>
   error instanceof Error
