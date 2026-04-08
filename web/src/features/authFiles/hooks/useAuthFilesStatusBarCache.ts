@@ -9,7 +9,7 @@ export function useAuthFilesStatusBarCache(files: AuthFileItem[], usageDetails: 
     const cache = new Map<string, AuthFileStatusBarData>();
 
     files.forEach((file) => {
-      const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+      const rawAuthIndex = file.authIndex;
       const authIndexKey = normalizeAuthIndex(rawAuthIndex);
 
       if (authIndexKey) {

@@ -12,6 +12,7 @@ import {
   readCodexAuthFileWebsockets,
 } from '@/features/authFiles/constants';
 import { applyAuthFileEditableValues } from '@/features/authFiles/authFileEditor';
+import { saveAuthFileText } from '@/domains/authFiles/mutations';
 
 export type PrefixProxyEditorField =
   | 'prefix'
@@ -46,7 +47,6 @@ export type PrefixProxyEditorState = {
 
 export type UseAuthFilesPrefixProxyEditorOptions = {
   disableControls: boolean;
-  loadFiles: () => Promise<void>;
   loadKeyStats: () => Promise<void>;
 };
 
@@ -76,7 +76,7 @@ const buildPrefixProxyUpdatedText = (editor: PrefixProxyEditorState | null): str
 export function useAuthFilesPrefixProxyEditor(
   options: UseAuthFilesPrefixProxyEditorOptions
 ): UseAuthFilesPrefixProxyEditorResult {
-  const { disableControls, loadFiles, loadKeyStats } = options;
+  const { disableControls, loadKeyStats } = options;
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
 
@@ -245,9 +245,8 @@ export function useAuthFilesPrefixProxyEditor(
     });
 
     try {
-      await authFilesApi.saveText(name, payload);
+      await saveAuthFileText(name, payload);
       showNotification(t('auth_files.prefix_proxy_saved_success', { name }), 'success');
-      await loadFiles();
       await loadKeyStats();
       setPrefixProxyEditor(null);
     } catch (err: unknown) {

@@ -422,7 +422,7 @@ export function OAuthPage() {
                 iconSrc={getIcon(provider.icon, resolvedTheme)}
                 extra={
                   <Button onClick={() => startAuth(provider.id)} loading={state.polling}>
-                    {t('common.login')}
+                    {t(getAuthKey(provider.id, 'oauth_button'))}
                   </Button>
                 }
               >

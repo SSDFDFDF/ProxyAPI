@@ -7,8 +7,8 @@ import {
   IconFileText,
   IconSatellite
 } from '@/components/ui/icons';
-import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
-import { apiKeysApi, providersApi, authFilesApi } from '@/services/api';
+import { useAuthFilesStore, useAuthStore, useConfigStore, useModelsStore } from '@/stores';
+import { apiKeysApi, providersApi } from '@/services/api';
 import styles from './DashboardPage.module.scss';
 
 interface QuickStat {
@@ -44,6 +44,7 @@ export function DashboardPage() {
   const serverBuildDate = useAuthStore((state) => state.serverBuildDate);
   const apiBase = useAuthStore((state) => state.apiBase);
   const config = useConfigStore((state) => state.config);
+  const loadAuthFiles = useAuthFilesStore((state) => state.loadAuthFiles);
 
   const models = useModelsStore((state) => state.models);
   const modelsLoading = useModelsStore((state) => state.loading);
@@ -153,7 +154,7 @@ export function DashboardPage() {
       try {
         const [keysRes, filesRes, geminiRes, codexRes, claudeRes, openaiRes] = await Promise.allSettled([
           apiKeysApi.list(),
-          authFilesApi.list(),
+          loadAuthFiles(),
           providersApi.getGeminiKeys(),
           providersApi.getCodexConfigs(),
           providersApi.getClaudeConfigs(),
@@ -162,7 +163,7 @@ export function DashboardPage() {
 
         setStats({
           apiKeys: keysRes.status === 'fulfilled' ? keysRes.value.length : null,
-          authFiles: filesRes.status === 'fulfilled' ? filesRes.value.files.length : null
+          authFiles: filesRes.status === 'fulfilled' ? filesRes.value.length : null
         });
 
         setProviderStats({
@@ -182,7 +183,7 @@ export function DashboardPage() {
     } else {
       setLoading(false);
     }
-  }, [connectionStatus, fetchModels]);
+  }, [connectionStatus, fetchModels, loadAuthFiles]);
 
   // Calculate total provider keys only when all provider stats are available.
   const providerStatsReady =

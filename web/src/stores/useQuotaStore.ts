@@ -6,18 +6,24 @@ import { create } from 'zustand';
 import type { AntigravityQuotaState, ClaudeQuotaState, CodexQuotaState, GeminiCliQuotaState, KimiQuotaState } from '@/types';
 
 type QuotaUpdater<T> = T | ((prev: T) => T);
+type ScopedQuotaUpdater<T> = {
+  scopeKey: string;
+  updater: QuotaUpdater<T>;
+};
 
 interface QuotaStoreState {
+  scopeKey: string;
   antigravityQuota: Record<string, AntigravityQuotaState>;
   claudeQuota: Record<string, ClaudeQuotaState>;
   codexQuota: Record<string, CodexQuotaState>;
   geminiCliQuota: Record<string, GeminiCliQuotaState>;
   kimiQuota: Record<string, KimiQuotaState>;
-  setAntigravityQuota: (updater: QuotaUpdater<Record<string, AntigravityQuotaState>>) => void;
-  setClaudeQuota: (updater: QuotaUpdater<Record<string, ClaudeQuotaState>>) => void;
-  setCodexQuota: (updater: QuotaUpdater<Record<string, CodexQuotaState>>) => void;
-  setGeminiCliQuota: (updater: QuotaUpdater<Record<string, GeminiCliQuotaState>>) => void;
-  setKimiQuota: (updater: QuotaUpdater<Record<string, KimiQuotaState>>) => void;
+  ensureScope: (scopeKey: string) => void;
+  setAntigravityQuota: (payload: ScopedQuotaUpdater<Record<string, AntigravityQuotaState>>) => void;
+  setClaudeQuota: (payload: ScopedQuotaUpdater<Record<string, ClaudeQuotaState>>) => void;
+  setCodexQuota: (payload: ScopedQuotaUpdater<Record<string, CodexQuotaState>>) => void;
+  setGeminiCliQuota: (payload: ScopedQuotaUpdater<Record<string, GeminiCliQuotaState>>) => void;
+  setKimiQuota: (payload: ScopedQuotaUpdater<Record<string, KimiQuotaState>>) => void;
   clearQuotaCache: () => void;
 }
 
@@ -28,38 +34,52 @@ const resolveUpdater = <T,>(updater: QuotaUpdater<T>, prev: T): T => {
   return updater;
 };
 
-export const useQuotaStore = create<QuotaStoreState>((set) => ({
+const applyScopedQuotaUpdate = <T,>(
+  state: QuotaStoreState,
+  payload: ScopedQuotaUpdater<T>,
+  key: keyof Pick<
+    QuotaStoreState,
+    'antigravityQuota' | 'claudeQuota' | 'codexQuota' | 'geminiCliQuota' | 'kimiQuota'
+  >
+) => {
+  if (state.scopeKey !== payload.scopeKey) {
+    return state;
+  }
+
+  return {
+    [key]: resolveUpdater(payload.updater, state[key] as T)
+  };
+};
+
+const buildEmptyQuotaState = (scopeKey: string = '') => ({
+  scopeKey,
   antigravityQuota: {},
   claudeQuota: {},
   codexQuota: {},
   geminiCliQuota: {},
-  kimiQuota: {},
-  setAntigravityQuota: (updater) =>
-    set((state) => ({
-      antigravityQuota: resolveUpdater(updater, state.antigravityQuota)
-    })),
-  setClaudeQuota: (updater) =>
-    set((state) => ({
-      claudeQuota: resolveUpdater(updater, state.claudeQuota)
-    })),
-  setCodexQuota: (updater) =>
-    set((state) => ({
-      codexQuota: resolveUpdater(updater, state.codexQuota)
-    })),
-  setGeminiCliQuota: (updater) =>
-    set((state) => ({
-      geminiCliQuota: resolveUpdater(updater, state.geminiCliQuota)
-    })),
-  setKimiQuota: (updater) =>
-    set((state) => ({
-      kimiQuota: resolveUpdater(updater, state.kimiQuota)
-    })),
+  kimiQuota: {}
+});
+
+export const useQuotaStore = create<QuotaStoreState>((set) => ({
+  ...buildEmptyQuotaState(),
+  ensureScope: (scopeKey) =>
+    set((state) => {
+      if (state.scopeKey === scopeKey) {
+        return state;
+      }
+
+      return buildEmptyQuotaState(scopeKey);
+    }),
+  setAntigravityQuota: (payload) =>
+    set((state) => applyScopedQuotaUpdate(state, payload, 'antigravityQuota')),
+  setClaudeQuota: (payload) =>
+    set((state) => applyScopedQuotaUpdate(state, payload, 'claudeQuota')),
+  setCodexQuota: (payload) =>
+    set((state) => applyScopedQuotaUpdate(state, payload, 'codexQuota')),
+  setGeminiCliQuota: (payload) =>
+    set((state) => applyScopedQuotaUpdate(state, payload, 'geminiCliQuota')),
+  setKimiQuota: (payload) =>
+    set((state) => applyScopedQuotaUpdate(state, payload, 'kimiQuota')),
   clearQuotaCache: () =>
-    set({
-      antigravityQuota: {},
-      claudeQuota: {},
-      codexQuota: {},
-      geminiCliQuota: {},
-      kimiQuota: {}
-    })
+    set((state) => buildEmptyQuotaState(state.scopeKey))
 }));

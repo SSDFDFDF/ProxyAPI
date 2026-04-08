@@ -7,9 +7,10 @@ import { ModelMappingDiagram, type ModelMappingDiagramRef } from '@/components/m
 import { IconChevronUp } from '@/components/ui/icons';
 import type { OAuthModelAliasEntry } from '@/types';
 import type { AuthFileModelItem } from '@/features/authFiles/constants';
+import type { ProviderModelsError } from '@/stores/useProviderModelDefinitionsStore';
 import styles from '@/pages/AuthFilesPage.module.scss';
 
-type UnsupportedError = 'unsupported' | null;
+type UnsupportedError = 'unsupported' | 'failed' | null;
 type ViewMode = 'diagram' | 'list';
 
 export type OAuthModelAliasCardProps = {
@@ -20,6 +21,7 @@ export type OAuthModelAliasCardProps = {
   onEditProvider: (provider?: string) => void;
   onDeleteProvider: (provider: string) => void;
   modelAliasError: UnsupportedError;
+  providerModelErrors: Record<string, ProviderModelsError>;
   modelAlias: Record<string, OAuthModelAliasEntry[]>;
   allProviderModels: Record<string, AuthFileModelItem[]>;
   onUpdate: (provider: string, sourceModel: string, newAlias: string) => Promise<void>;
@@ -40,6 +42,7 @@ export function OAuthModelAliasCard(props: OAuthModelAliasCardProps) {
     onEditProvider,
     onDeleteProvider,
     modelAliasError,
+    providerModelErrors,
     modelAlias,
     allProviderModels,
     onUpdate,
@@ -54,12 +57,15 @@ export function OAuthModelAliasCard(props: OAuthModelAliasCardProps) {
       title={t('oauth_model_alias.title')}
       extra={
         <div className={styles.cardExtraButtons}>
+          {Object.values(providerModelErrors).includes('failed') && (
+            <span className={styles.modelsHint}>{t('notification.refresh_failed')}</span>
+          )}
           <div className={styles.viewModeSwitch}>
             <Button
               variant={viewMode === 'list' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => onViewModeChange('list')}
-              disabled={disableControls || modelAliasError === 'unsupported'}
+              disabled={disableControls}
             >
               {t('oauth_model_alias.view_mode_list')}
             </Button>
@@ -67,7 +73,7 @@ export function OAuthModelAliasCard(props: OAuthModelAliasCardProps) {
               variant={viewMode === 'diagram' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => onViewModeChange('diagram')}
-              disabled={disableControls || modelAliasError === 'unsupported'}
+              disabled={disableControls}
             >
               {t('oauth_model_alias.view_mode_diagram')}
             </Button>
@@ -75,7 +81,7 @@ export function OAuthModelAliasCard(props: OAuthModelAliasCardProps) {
           <Button
             size="sm"
             onClick={onAdd}
-            disabled={disableControls || modelAliasError === 'unsupported'}
+            disabled={disableControls}
           >
             {t('oauth_model_alias.add')}
           </Button>
@@ -98,7 +104,7 @@ export function OAuthModelAliasCard(props: OAuthModelAliasCardProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => diagramRef.current?.collapseAll()}
-                disabled={disableControls || modelAliasError === 'unsupported'}
+                disabled={disableControls}
                 title={t('oauth_model_alias.diagram_collapse')}
                 aria-label={t('oauth_model_alias.diagram_collapse')}
               >
@@ -135,10 +141,20 @@ export function OAuthModelAliasCard(props: OAuthModelAliasCardProps) {
                 </div>
               </div>
               <div className={styles.excludedActions}>
-                <Button variant="secondary" size="sm" onClick={() => onEditProvider(provider)}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onEditProvider(provider)}
+                  disabled={disableControls}
+                >
                   {t('common.edit')}
                 </Button>
-                <Button variant="danger" size="sm" onClick={() => onDeleteProvider(provider)}>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => onDeleteProvider(provider)}
+                  disabled={disableControls}
+                >
                   {t('oauth_model_alias.delete')}
                 </Button>
               </div>

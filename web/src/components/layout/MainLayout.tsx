@@ -292,9 +292,7 @@ export function MainLayout() {
             className="sidebar-toggle-header"
             onClick={() => setSidebarCollapsed((prev) => !prev)}
             title={
-              sidebarCollapsed
-                ? t('sidebar.expand', { defaultValue: '展开' })
-                : t('sidebar.collapse', { defaultValue: '收起' })
+              sidebarCollapsed ? t('common.expand') : t('common.collapse')
             }
           >
             {sidebarCollapsed ? headerIcons.chevronRight : headerIcons.chevronLeft}

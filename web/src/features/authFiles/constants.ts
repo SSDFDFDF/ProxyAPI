@@ -226,7 +226,7 @@ export const applyCodexAuthFileWebsockets = (
 };
 
 export function isRuntimeOnlyAuthFile(file: AuthFileItem): boolean {
-  const raw = file['runtime_only'] ?? file.runtimeOnly;
+  const raw = file.runtimeOnly;
   if (typeof raw === 'boolean') return raw;
   if (typeof raw === 'string') return raw.trim().toLowerCase() === 'true';
   return false;
@@ -237,7 +237,7 @@ export function resolveAuthFileStats(file: AuthFileItem, stats: KeyStats): KeySt
   const rawFileName = file?.name || '';
 
   // 兼容 auth_index 和 authIndex 两种字段名（API 返回的是 auth_index）
-  const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+  const rawAuthIndex = file.authIndex;
   const authIndexKey = normalizeAuthIndex(rawAuthIndex);
 
   // 尝试根据 authIndex 匹配

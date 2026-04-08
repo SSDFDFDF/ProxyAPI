@@ -10,12 +10,15 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { IconInfo } from '@/components/ui/icons';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
-import { useAuthStore, useNotificationStore } from '@/stores';
-import { authFilesApi } from '@/services/api';
-import type { AuthFileItem, OAuthModelAliasEntry } from '@/types';
+import {
+  useAuthFilesOauthStore,
+  useAuthFilesStore,
+  useAuthStore,
+  useNotificationStore,
+  useProviderModelDefinitionsStore,
+} from '@/stores';
 import styles from './AuthFilesOAuthExcludedEditPage.module.scss';
-
-type AuthFileModelItem = { id: string; display_name?: string; type?: string; owned_by?: string };
+import { deleteOauthExcludedEntry, saveOauthExcludedModels } from '@/domains/authFiles/mutations';
 
 type LocationState = { fromAuthFiles?: boolean } | null;
 
@@ -47,22 +50,27 @@ export function AuthFilesOAuthExcludedEditPage() {
   const providerFromParams = searchParams.get('provider') ?? '';
 
   const [provider, setProvider] = useState(providerFromParams);
-  const [files, setFiles] = useState<AuthFileItem[]>([]);
-  const [excluded, setExcluded] = useState<Record<string, string[]>>({});
-  const [modelAlias, setModelAlias] = useState<Record<string, OAuthModelAliasEntry[]>>({});
+  const files = useAuthFilesStore((state) => state.files);
+  const loadAuthFiles = useAuthFilesStore((state) => state.loadAuthFiles);
+  const excluded = useAuthFilesOauthStore((state) => state.excluded);
+  const excludedError = useAuthFilesOauthStore((state) => state.excludedError);
+  const modelAlias = useAuthFilesOauthStore((state) => state.modelAlias);
+  const loadExcluded = useAuthFilesOauthStore((state) => state.loadExcluded);
+  const loadModelAlias = useAuthFilesOauthStore((state) => state.loadModelAlias);
+  const providerModelsByProvider = useProviderModelDefinitionsStore((state) => state.modelsByProvider);
+  const providerModelErrors = useProviderModelDefinitionsStore((state) => state.errorsByProvider);
+  const providerModelsLoading = useProviderModelDefinitionsStore((state) => state.loadingByProvider);
+  const loadProviderModels = useProviderModelDefinitionsStore((state) => state.loadProviderModels);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [excludedUnsupported, setExcludedUnsupported] = useState(false);
 
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
-  const [modelsList, setModelsList] = useState<AuthFileModelItem[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(false);
-  const [modelsError, setModelsError] = useState<'unsupported' | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setProvider(providerFromParams);
   }, [providerFromParams]);
 
+  const excludedUnsupported = excludedError === 'unsupported';
   const providerOptions = useMemo(() => {
     const extraProviders = new Set<string>();
     Object.keys(excluded).forEach((value) => extraProviders.add(value));
@@ -138,39 +146,8 @@ export function AuthFilesOAuthExcludedEditPage() {
 
     const load = async () => {
       setInitialLoading(true);
-      setExcludedUnsupported(false);
       try {
-        const [filesResult, excludedResult, aliasResult] = await Promise.allSettled([
-          authFilesApi.list(),
-          authFilesApi.getOauthExcludedModels(),
-          authFilesApi.getOauthModelAlias(),
-        ]);
-
-        if (cancelled) return;
-
-        if (filesResult.status === 'fulfilled') {
-          setFiles(filesResult.value?.files ?? []);
-        }
-
-        if (aliasResult.status === 'fulfilled') {
-          setModelAlias(aliasResult.value ?? {});
-        }
-
-        if (excludedResult.status === 'fulfilled') {
-          setExcluded(excludedResult.value ?? {});
-          return;
-        }
-
-        const err = excludedResult.status === 'rejected' ? excludedResult.reason : null;
-        const status =
-          typeof err === 'object' && err !== null && 'status' in err
-            ? (err as { status?: unknown }).status
-            : undefined;
-
-        if (status === 404) {
-          setExcludedUnsupported(true);
-          return;
-        }
+        await Promise.allSettled([loadAuthFiles(), loadExcluded(), loadModelAlias()]);
       } finally {
         if (!cancelled) {
           setInitialLoading(false);
@@ -187,7 +164,7 @@ export function AuthFilesOAuthExcludedEditPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAuthFiles, loadExcluded, loadModelAlias]);
 
   useEffect(() => {
     if (!resolvedProviderKey) {
@@ -200,47 +177,21 @@ export function AuthFilesOAuthExcludedEditPage() {
 
   useEffect(() => {
     if (!resolvedProviderKey || excludedUnsupported) {
-      setModelsList([]);
-      setModelsError(null);
-      setModelsLoading(false);
       return;
     }
 
-    let cancelled = false;
-    setModelsLoading(true);
-    setModelsError(null);
+    void loadProviderModels(resolvedProviderKey).catch((err: unknown) => {
+      const errorMessage = err instanceof Error ? err.message : t('common.unknown_error');
+      showNotification(`${t('oauth_excluded.load_failed')}: ${errorMessage}`, 'error');
+    });
+  }, [excludedUnsupported, loadProviderModels, resolvedProviderKey, showNotification, t]);
 
-    authFilesApi
-      .getModelDefinitions(resolvedProviderKey)
-      .then((models) => {
-        if (cancelled) return;
-        setModelsList(models);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        const status =
-          typeof err === 'object' && err !== null && 'status' in err
-            ? (err as { status?: unknown }).status
-            : undefined;
-
-        if (status === 404) {
-          setModelsList([]);
-          setModelsError('unsupported');
-          return;
-        }
-
-        const errorMessage = err instanceof Error ? err.message : '';
-        showNotification(`${t('notification.load_failed')}: ${errorMessage}`, 'error');
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setModelsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [excludedUnsupported, resolvedProviderKey, showNotification, t]);
+  const modelsList = resolvedProviderKey ? providerModelsByProvider[resolvedProviderKey] ?? [] : [];
+  const modelsLoading =
+    resolvedProviderKey ? providerModelsLoading[resolvedProviderKey] === true : false;
+  const modelsError =
+    resolvedProviderKey ? providerModelErrors[resolvedProviderKey] ?? null : null;
+  const modelsFailed = modelsError === 'failed';
 
   const updateProvider = useCallback(
     (value: string) => {
@@ -280,9 +231,9 @@ export function AuthFilesOAuthExcludedEditPage() {
     setSaving(true);
     try {
       if (models.length) {
-        await authFilesApi.saveOauthExcludedModels(normalizedProvider, models);
+        await saveOauthExcludedModels(normalizedProvider, models);
       } else {
-        await authFilesApi.deleteOauthExcludedEntry(normalizedProvider);
+        await deleteOauthExcludedEntry(normalizedProvider);
       }
       showNotification(t('oauth_excluded.save_success'), 'success');
       handleBack();
@@ -382,6 +333,8 @@ export function AuthFilesOAuthExcludedEditPage() {
                     </>
                   ) : modelsError === 'unsupported' ? (
                     <span>{t('oauth_excluded.models_unsupported')}</span>
+                  ) : modelsFailed ? (
+                    <span>{t('oauth_excluded.load_failed')}</span>
                   ) : modelsList.length > 0 ? (
                     <span>{t('oauth_excluded.models_loaded', { count: modelsList.length })}</span>
                   ) : (
@@ -424,7 +377,9 @@ export function AuthFilesOAuthExcludedEditPage() {
               <div className={styles.emptyModels}>
                 {modelsError === 'unsupported'
                   ? t('oauth_excluded.models_unsupported')
-                  : t('oauth_excluded.no_models_available')}
+                  : modelsFailed
+                    ? t('oauth_excluded.load_failed')
+                    : t('oauth_excluded.no_models_available')}
               </div>
             ) : (
               <div className={styles.emptyModels}>{t('oauth_excluded.provider_required')}</div>

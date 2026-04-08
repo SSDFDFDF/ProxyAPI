@@ -210,6 +210,12 @@ const isRuntimeOnlyEntry = (entry: AuthFileEntry): boolean => {
   return false;
 };
 
+const readAuthIndexField = (entry: AuthFileEntry): string | number | null => {
+  const value = entry['auth_index'] ?? entry.authIndex;
+  if (value === null || value === undefined || value === '') return null;
+  return value as string | number;
+};
+
 const hasMeaningfulValue = (value: unknown): boolean => {
   if (value == null) return false;
   if (typeof value === 'string') return value.trim().length > 0;
@@ -276,7 +282,17 @@ const dedupeAuthFilesResponse = (payload: AuthFilesResponse): AuthFilesResponse 
     grouped.set(key, [entry]);
   });
 
-  const normalizedFiles = Array.from(grouped.values()).map(mergeAuthFileEntries);
+  const normalizedFiles = Array.from(grouped.values()).map((entries) => {
+    const merged = mergeAuthFileEntries(entries);
+    const authIndex = readAuthIndexField(merged);
+    const runtimeOnly = isRuntimeOnlyEntry(merged);
+
+    return {
+      ...merged,
+      authIndex,
+      runtimeOnly
+    };
+  });
   normalizedFiles.sort((left, right) =>
     readTextField(left, 'name').localeCompare(readTextField(right, 'name'), undefined, {
       sensitivity: 'accent',

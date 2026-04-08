@@ -9,9 +9,13 @@ import type { AuthState, LoginCredentials, ConnectionStatus } from '@/types';
 import { STORAGE_KEY_AUTH } from '@/utils/constants';
 import { obfuscatedStorage } from '@/services/storage/secureStorage';
 import { apiClient } from '@/services/api/client';
-import { useConfigStore } from './useConfigStore';
+import { buildConfigScopeKey, useConfigStore } from './useConfigStore';
 import { useUsageStatsStore } from './useUsageStatsStore';
 import { useModelsStore } from './useModelsStore';
+import { useQuotaStore } from './useQuotaStore';
+import { useAuthFilesStore } from './useAuthFilesStore';
+import { useAuthFilesOauthStore } from './useAuthFilesOauthStore';
+import { useProviderModelDefinitionsStore } from './useProviderModelDefinitionsStore';
 import { detectApiBaseFromLocation, normalizeApiBase } from '@/utils/connection';
 
 interface AuthStoreState extends AuthState {
@@ -47,23 +51,15 @@ export const useAuthStore = create<AuthStoreState>()(
         if (restoreSessionPromise) return restoreSessionPromise;
 
         restoreSessionPromise = (async () => {
-          obfuscatedStorage.migratePlaintextKeys(['apiBase', 'apiUrl', 'managementKey']);
-
           const wasLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-          const legacyBase =
-            obfuscatedStorage.getItem<string>('apiBase') ||
-            obfuscatedStorage.getItem<string>('apiUrl', { encrypt: true });
-          const legacyKey = obfuscatedStorage.getItem<string>('managementKey');
-
           const { apiBase, managementKey, rememberPassword } = get();
-          const resolvedBase = normalizeApiBase(apiBase || legacyBase || detectApiBaseFromLocation());
-          const resolvedKey = managementKey || legacyKey || '';
-          const resolvedRememberPassword = rememberPassword || Boolean(managementKey) || Boolean(legacyKey);
+          const resolvedBase = normalizeApiBase(apiBase || detectApiBaseFromLocation());
+          const resolvedKey = managementKey || '';
 
           set({
             apiBase: resolvedBase,
             managementKey: resolvedKey,
-            rememberPassword: resolvedRememberPassword
+            rememberPassword
           });
           apiClient.setConfig({ apiBase: resolvedBase, managementKey: resolvedKey });
 
@@ -72,7 +68,7 @@ export const useAuthStore = create<AuthStoreState>()(
               await get().login({
                 apiBase: resolvedBase,
                 managementKey: resolvedKey,
-                rememberPassword: resolvedRememberPassword
+                rememberPassword
               });
               return true;
             } catch (error) {
@@ -95,7 +91,12 @@ export const useAuthStore = create<AuthStoreState>()(
 
         try {
           set({ connectionStatus: 'connecting' });
+          useUsageStatsStore.getState().clearUsageStats();
           useModelsStore.getState().clearCache();
+          useQuotaStore.getState().clearQuotaCache();
+          useAuthFilesStore.getState().clearAuthFiles();
+          useAuthFilesOauthStore.getState().clearOauthState();
+          useProviderModelDefinitionsStore.getState().clearProviderModels();
 
           // 配置 API 客户端
           apiClient.setConfig({
@@ -103,8 +104,13 @@ export const useAuthStore = create<AuthStoreState>()(
             managementKey
           });
 
+          const nextScopeKey = buildConfigScopeKey(apiBase, managementKey);
+
           // 测试连接 - 获取配置
-          await useConfigStore.getState().fetchConfig(undefined, true);
+          await useConfigStore.getState().fetchConfig(undefined, {
+            forceRefresh: true,
+            scopeKey: nextScopeKey
+          });
 
           // 登录成功
           set({
@@ -141,6 +147,10 @@ export const useAuthStore = create<AuthStoreState>()(
         useConfigStore.getState().clearCache();
         useUsageStatsStore.getState().clearUsageStats();
         useModelsStore.getState().clearCache();
+        useQuotaStore.getState().clearQuotaCache();
+        useAuthFilesStore.getState().clearAuthFiles();
+        useAuthFilesOauthStore.getState().clearOauthState();
+        useProviderModelDefinitionsStore.getState().clearProviderModels();
         set({
           isAuthenticated: false,
           apiBase: '',

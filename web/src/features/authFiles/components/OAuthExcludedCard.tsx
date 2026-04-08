@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import styles from '@/pages/AuthFilesPage.module.scss';
 
-type UnsupportedError = 'unsupported' | null;
+type UnsupportedError = 'unsupported' | 'failed' | null;
 
 export type OAuthExcludedCardProps = {
   disableControls: boolean;
@@ -33,6 +33,8 @@ export function OAuthExcludedCard(props: OAuthExcludedCardProps) {
           title={t('oauth_excluded.upgrade_required_title')}
           description={t('oauth_excluded.upgrade_required_desc')}
         />
+      ) : excludedError === 'failed' && Object.keys(excluded).length === 0 ? (
+        <EmptyState title={t('oauth_excluded.load_failed')} />
       ) : Object.keys(excluded).length === 0 ? (
         <EmptyState title={t('oauth_excluded.list_empty_all')} />
       ) : (
@@ -48,10 +50,20 @@ export function OAuthExcludedCard(props: OAuthExcludedCardProps) {
                 </div>
               </div>
               <div className={styles.excludedActions}>
-                <Button variant="secondary" size="sm" onClick={() => onEdit(provider)}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onEdit(provider)}
+                  disabled={disableControls}
+                >
                   {t('common.edit')}
                 </Button>
-                <Button variant="danger" size="sm" onClick={() => onDelete(provider)}>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => onDelete(provider)}
+                  disabled={disableControls}
+                >
                   {t('oauth_excluded.delete')}
                 </Button>
               </div>

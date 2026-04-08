@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
-import { providersApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore, useOpenAIEditDraftStore } from '@/stores';
 import { entriesToModels, modelsToEntries } from '@/components/ui/modelInputListUtils';
 import type { ApiKeyEntry, OpenAIProviderConfig } from '@/types';
@@ -12,6 +11,7 @@ import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/u
 import { buildApiKeyEntry } from '@/components/providers/utils';
 import type { ModelEntry, OpenAIFormState } from '@/components/providers/types';
 import type { KeyTestStatus } from '@/stores/useOpenAIEditDraftStore';
+import { saveOpenAIProviderList } from '@/domains/providers/mutations';
 
 type LocationState = { fromAiProviders?: boolean } | null;
 
@@ -151,6 +151,7 @@ export function AiProvidersOpenAIEditLayout() {
   const draft = useOpenAIEditDraftStore((state) => state.drafts[draftKey]);
   const acquireDraft = useOpenAIEditDraftStore((state) => state.acquireDraft);
   const releaseDraft = useOpenAIEditDraftStore((state) => state.releaseDraft);
+  const clearDraft = useOpenAIEditDraftStore((state) => state.clearDraft);
   const initDraft = useOpenAIEditDraftStore((state) => state.initDraft);
   const setDraftBaselineSignature = useOpenAIEditDraftStore((state) => state.setDraftBaselineSignature);
   const setDraftForm = useOpenAIEditDraftStore((state) => state.setDraftForm);
@@ -214,6 +215,33 @@ export function AiProvidersOpenAIEditLayout() {
     return providers[editIndex];
   }, [editIndex, providers]);
 
+  const initialSignature = useMemo(() => {
+    if (initialData) {
+      const modelEntries = modelsToEntries(initialData.models);
+      const available = modelEntries.map((entry) => entry.name.trim()).filter(Boolean);
+      const initialTestModel =
+        initialData.testModel && available.includes(initialData.testModel)
+          ? initialData.testModel
+          : available[0] || '';
+      const seededForm: OpenAIFormState = {
+        name: initialData.name,
+        priority: initialData.priority,
+        prefix: initialData.prefix ?? '',
+        baseUrl: initialData.baseUrl,
+        headers: headersToEntries(initialData.headers),
+        testModel: initialData.testModel,
+        modelEntries,
+        apiKeyEntries: initialData.apiKeyEntries?.length
+          ? initialData.apiKeyEntries
+          : [buildApiKeyEntry()],
+      };
+      return buildOpenAISignature(seededForm, initialTestModel);
+    }
+
+    const emptyForm = buildEmptyForm();
+    return buildOpenAISignature(emptyForm, '');
+  }, [initialData]);
+
   const invalidIndex = editIndex !== null && !initialData;
 
   const availableModels = useMemo(
@@ -249,8 +277,8 @@ export function AiProvidersOpenAIEditLayout() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        const message = getErrorMessage(err) || t('notification.refresh_failed');
-        showNotification(`${t('notification.load_failed')}: ${message}`, 'error');
+        const message = getErrorMessage(err) || t('common.unknown_error');
+        showNotification(`${t('notification.refresh_failed')}: ${message}`, 'error');
       })
       .finally(() => {
         if (cancelled) return;
@@ -264,7 +292,12 @@ export function AiProvidersOpenAIEditLayout() {
 
   useEffect(() => {
     if (loading) return;
-    if (draft?.initialized) return;
+
+    if (draft?.initialized && draft.baselineSignature === initialSignature) {
+      return;
+    }
+
+    clearDraft(draftKey);
 
     if (initialData) {
       const modelEntries = modelsToEntries(initialData.models);
@@ -286,9 +319,8 @@ export function AiProvidersOpenAIEditLayout() {
         initialData.testModel && available.includes(initialData.testModel)
           ? initialData.testModel
           : available[0] || '';
-      const baselineSignature = buildOpenAISignature(seededForm, initialTestModel);
       initDraft(draftKey, {
-        baselineSignature,
+        baselineSignature: initialSignature,
         form: seededForm,
         testModel: initialTestModel,
         testStatus: 'idle',
@@ -298,7 +330,7 @@ export function AiProvidersOpenAIEditLayout() {
     } else {
       const emptyForm = buildEmptyForm();
       initDraft(draftKey, {
-        baselineSignature: buildOpenAISignature(emptyForm, ''),
+        baselineSignature: initialSignature,
         form: emptyForm,
         testModel: '',
         testStatus: 'idle',
@@ -306,7 +338,7 @@ export function AiProvidersOpenAIEditLayout() {
         keyTestStatuses: [],
       });
     }
-  }, [draft?.initialized, draftKey, initDraft, initialData, loading]);
+  }, [clearDraft, draft?.baselineSignature, draft?.initialized, draftKey, initDraft, initialData, initialSignature, loading]);
 
   useEffect(() => {
     if (loading) return;
@@ -425,17 +457,7 @@ export function AiProvidersOpenAIEditLayout() {
           ? providers.map((item, idx) => (idx === editIndex ? payload : item))
           : [...providers, payload];
 
-      await providersApi.saveOpenAIProviders(nextList);
-
-      let syncedProviders = nextList;
-      try {
-        const latest = await fetchConfig('openai-compatibility', true);
-        if (Array.isArray(latest)) {
-          syncedProviders = latest as OpenAIProviderConfig[];
-        }
-      } catch {
-        // 保存成功后刷新失败时，回退到本地计算结果，避免页面数据为空或回退
-      }
+      const syncedProviders = await saveOpenAIProviderList(nextList, providers);
 
       setProviders(syncedProviders);
       showNotification(
@@ -456,7 +478,6 @@ export function AiProvidersOpenAIEditLayout() {
     allowNextNavigation,
     draftKey,
     editIndex,
-    fetchConfig,
     form,
     handleBack,
     providers,

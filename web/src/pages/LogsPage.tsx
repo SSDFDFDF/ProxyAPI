@@ -197,7 +197,7 @@ export function LogsPage() {
 
   const clearLogs = async () => {
     showConfirmation({
-      title: t('logs.clear_confirm_title', { defaultValue: 'Clear Logs' }),
+      title: t('common.delete'),
       message: t('logs.clear_confirm'),
       variant: 'danger',
       confirmText: t('common.confirm'),

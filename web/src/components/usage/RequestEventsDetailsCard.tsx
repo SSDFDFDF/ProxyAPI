@@ -87,7 +87,7 @@ export function RequestEventsDetailsCard({
         if (!Array.isArray(files)) return;
         const map = new Map<string, CredentialInfo>();
         files.forEach((file) => {
-          const key = normalizeAuthIndex(file['auth_index'] ?? file.authIndex);
+          const key = normalizeAuthIndex(file.authIndex);
           if (!key) return;
           map.set(key, {
             name: file.name || key,

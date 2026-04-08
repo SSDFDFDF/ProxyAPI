@@ -31,6 +31,7 @@ import type {
 } from '@/types';
 import { apiCallApi, authFilesApi, getApiCallErrorMessage } from '@/services/api';
 import { useQuotaStore } from '@/stores';
+import { getCurrentSessionScopeKey } from '@/stores/serverState/sessionScope';
 import { QUOTA_REQUEST_TIMEOUT_MS } from '@/utils/constants';
 import {
   ANTIGRAVITY_QUOTA_URLS,
@@ -99,17 +100,27 @@ const geminiCliSupplementaryCache = new Map<
   { requestId: number; tierLabel: string | null; tierId: string | null; creditBalance: number | null }
 >();
 
+const buildGeminiCliSupplementaryKey = (scopeKey: string, fileName: string) =>
+  `${scopeKey}::${fileName}`;
+
+type ScopedQuotaUpdater<T> = {
+  scopeKey: string;
+  updater: QuotaUpdater<T>;
+};
+
 export interface QuotaStore {
+  scopeKey: string;
   antigravityQuota: Record<string, AntigravityQuotaState>;
   claudeQuota: Record<string, ClaudeQuotaState>;
   codexQuota: Record<string, CodexQuotaState>;
   geminiCliQuota: Record<string, GeminiCliQuotaState>;
   kimiQuota: Record<string, KimiQuotaState>;
-  setAntigravityQuota: (updater: QuotaUpdater<Record<string, AntigravityQuotaState>>) => void;
-  setClaudeQuota: (updater: QuotaUpdater<Record<string, ClaudeQuotaState>>) => void;
-  setCodexQuota: (updater: QuotaUpdater<Record<string, CodexQuotaState>>) => void;
-  setGeminiCliQuota: (updater: QuotaUpdater<Record<string, GeminiCliQuotaState>>) => void;
-  setKimiQuota: (updater: QuotaUpdater<Record<string, KimiQuotaState>>) => void;
+  ensureScope: (scopeKey: string) => void;
+  setAntigravityQuota: (payload: ScopedQuotaUpdater<Record<string, AntigravityQuotaState>>) => void;
+  setClaudeQuota: (payload: ScopedQuotaUpdater<Record<string, ClaudeQuotaState>>) => void;
+  setCodexQuota: (payload: ScopedQuotaUpdater<Record<string, CodexQuotaState>>) => void;
+  setGeminiCliQuota: (payload: ScopedQuotaUpdater<Record<string, GeminiCliQuotaState>>) => void;
+  setKimiQuota: (payload: ScopedQuotaUpdater<Record<string, KimiQuotaState>>) => void;
   clearQuotaCache: () => void;
 }
 
@@ -167,7 +178,7 @@ const fetchAntigravityQuota = async (
   file: AuthFileItem,
   t: TFunction
 ): Promise<QuotaFetchResult<AntigravityQuotaGroup[]>> => {
-  const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+  const rawAuthIndex = file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
     throw new Error(t('antigravity_quota.missing_auth_index'));
@@ -418,7 +429,7 @@ const fetchCodexQuota = async (
   file: AuthFileItem,
   t: TFunction
 ): Promise<QuotaFetchResult<{ planType: string | null; windows: CodexQuotaWindow[] }>> => {
-  const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+  const rawAuthIndex = file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
     throw new Error(t('codex_quota.missing_auth_index'));
@@ -561,10 +572,11 @@ const fetchGeminiCliCodeAssist = async (
 };
 
 const readGeminiCliSupplementarySnapshot = (
+  scopeKey: string,
   fileName: string,
   requestId: number
 ): { tierLabel: string | null; tierId: string | null; creditBalance: number | null } => {
-  const cached = geminiCliSupplementaryCache.get(fileName);
+  const cached = geminiCliSupplementaryCache.get(buildGeminiCliSupplementaryKey(scopeKey, fileName));
   if (!cached || cached.requestId !== requestId) {
     return { tierLabel: null, tierId: null, creditBalance: null };
   }
@@ -581,46 +593,51 @@ const scheduleGeminiCliSupplementaryRefresh = (
   authIndex: string,
   projectId: string,
   t: TFunction
-): number => {
-  const requestId = (geminiCliSupplementaryRequestIds.get(fileName) ?? 0) + 1;
-  geminiCliSupplementaryRequestIds.set(fileName, requestId);
-  geminiCliSupplementaryCache.delete(fileName);
+): { requestId: number; scopeKey: string } => {
+  const scopeKey = getCurrentSessionScopeKey();
+  const cacheKey = buildGeminiCliSupplementaryKey(scopeKey, fileName);
+  const requestId = (geminiCliSupplementaryRequestIds.get(cacheKey) ?? 0) + 1;
+  geminiCliSupplementaryRequestIds.set(cacheKey, requestId);
+  geminiCliSupplementaryCache.delete(cacheKey);
 
   void (async () => {
     const supplementary = await fetchGeminiCliCodeAssist(authIndex, projectId, t);
-    if (geminiCliSupplementaryRequestIds.get(fileName) !== requestId) {
+    if (geminiCliSupplementaryRequestIds.get(cacheKey) !== requestId) {
       return;
     }
 
-    geminiCliSupplementaryCache.set(fileName, { requestId, ...supplementary });
+    geminiCliSupplementaryCache.set(cacheKey, { requestId, ...supplementary });
 
-    useQuotaStore.getState().setGeminiCliQuota((prev) => {
-      const current = prev[fileName];
-      if (!current || current.status !== 'success') {
-        return prev;
+    useQuotaStore.getState().setGeminiCliQuota({
+      scopeKey,
+      updater: (prev) => {
+        const current = prev[fileName];
+        if (!current || current.status !== 'success') {
+          return prev;
+        }
+
+        if (
+          current.tierLabel === supplementary.tierLabel &&
+          current.tierId === supplementary.tierId &&
+          current.creditBalance === supplementary.creditBalance
+        ) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [fileName]: {
+            ...current,
+            tierLabel: supplementary.tierLabel,
+            tierId: supplementary.tierId,
+            creditBalance: supplementary.creditBalance,
+          },
+        };
       }
-
-      if (
-        current.tierLabel === supplementary.tierLabel &&
-        current.tierId === supplementary.tierId &&
-        current.creditBalance === supplementary.creditBalance
-      ) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        [fileName]: {
-          ...current,
-          tierLabel: supplementary.tierLabel,
-          tierId: supplementary.tierId,
-          creditBalance: supplementary.creditBalance,
-        },
-      };
     });
   })();
 
-  return requestId;
+  return { requestId, scopeKey };
 };
 
 const fetchGeminiCliQuota = async (
@@ -630,13 +647,14 @@ const fetchGeminiCliQuota = async (
   QuotaFetchResult<{
     fileName: string;
     supplementaryRequestId: number;
+    supplementaryScopeKey: string;
     buckets: GeminiCliQuotaBucketState[];
     tierLabel: string | null;
     tierId: string | null;
     creditBalance: number | null;
   }>
 > => {
-  const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+  const rawAuthIndex = file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
     throw new Error(t('gemini_cli_quota.missing_auth_index'));
@@ -695,21 +713,23 @@ const fetchGeminiCliQuota = async (
     .filter((bucket): bucket is GeminiCliParsedBucket => bucket !== null);
 
   const builtBuckets = buildGeminiCliQuotaBuckets(parsedBuckets);
-  const supplementaryRequestId = scheduleGeminiCliSupplementaryRefresh(
+  const supplementaryRequest = scheduleGeminiCliSupplementaryRefresh(
     file.name,
     authIndex,
     projectId,
     t
   );
   const supplementarySnapshot = readGeminiCliSupplementarySnapshot(
+    supplementaryRequest.scopeKey,
     file.name,
-    supplementaryRequestId
+    supplementaryRequest.requestId
   );
 
   return {
     data: {
       fileName: file.name,
-      supplementaryRequestId,
+      supplementaryRequestId: supplementaryRequest.requestId,
+      supplementaryScopeKey: supplementaryRequest.scopeKey,
       buckets: builtBuckets,
       tierLabel: supplementarySnapshot.tierLabel,
       tierId: supplementarySnapshot.tierId,
@@ -1013,7 +1033,7 @@ const fetchClaudeQuota = async (
     planType?: string | null;
   }>
 > => {
-  const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+  const rawAuthIndex = file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
     throw new Error(t('claude_quota.missing_auth_index'));
@@ -1242,6 +1262,7 @@ export const GEMINI_CLI_CONFIG: QuotaConfig<
   {
     fileName: string;
     supplementaryRequestId: number;
+    supplementaryScopeKey: string;
     buckets: GeminiCliQuotaBucketState[];
     tierLabel: string | null;
     tierId: string | null;
@@ -1258,6 +1279,7 @@ export const GEMINI_CLI_CONFIG: QuotaConfig<
   buildLoadingState: () => ({ status: 'loading', buckets: [], tierLabel: null, tierId: null, creditBalance: null }),
   buildSuccessState: ({ data, searchText }) => {
     const supplementarySnapshot = readGeminiCliSupplementarySnapshot(
+      data.supplementaryScopeKey,
       data.fileName,
       data.supplementaryRequestId
     );
@@ -1289,7 +1311,7 @@ const fetchKimiQuota = async (
   file: AuthFileItem,
   t: TFunction
 ): Promise<QuotaFetchResult<KimiQuotaRow[]>> => {
-  const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+  const rawAuthIndex = file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
     throw new Error(t('kimi_quota.missing_auth_index'));

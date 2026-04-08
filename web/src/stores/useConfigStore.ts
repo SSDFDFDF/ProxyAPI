@@ -8,30 +8,42 @@ import type { Config } from '@/types';
 import type { RawConfigSection } from '@/types/config';
 import { configApi } from '@/services/api/config';
 import { CACHE_EXPIRY_MS } from '@/utils/constants';
+import { ScopedQueryCache } from './serverState/scopedQueryCache';
+import { buildSessionScopeKey, getCurrentSessionScopeKey } from './serverState/sessionScope';
 
-interface ConfigCache {
-  data: unknown;
-  timestamp: number;
-}
+type FetchConfigOptions = {
+  forceRefresh?: boolean;
+  scopeKey?: string;
+};
+
+type ConfigMutationOptions = {
+  scopeKey?: string;
+  invalidateCache?: boolean;
+};
+
+type ClearCacheOptions = {
+  scopeKey?: string;
+};
 
 interface ConfigState {
   config: Config | null;
-  cache: Map<string, ConfigCache>;
+  scopeKey: string;
   loading: boolean;
   error: string | null;
 
   // 操作
   fetchConfig: {
-    (section?: undefined, forceRefresh?: boolean): Promise<Config>;
-    (section: RawConfigSection, forceRefresh?: boolean): Promise<unknown>;
+    (section?: undefined, forceRefreshOrOptions?: boolean | FetchConfigOptions): Promise<Config>;
+    (section: RawConfigSection, forceRefreshOrOptions?: boolean | FetchConfigOptions): Promise<unknown>;
   };
-  updateConfigValue: (section: RawConfigSection, value: unknown) => void;
-  clearCache: (section?: RawConfigSection) => void;
-  isCacheValid: (section?: RawConfigSection) => boolean;
+  updateConfigValue: (section: RawConfigSection, value: unknown, options?: ConfigMutationOptions) => void;
+  clearCache: (section?: RawConfigSection, options?: ClearCacheOptions) => void;
+  isCacheValid: (section?: RawConfigSection, scopeKeyOverride?: string) => boolean;
 }
 
 let configRequestToken = 0;
-let inFlightConfigRequest: { id: number; promise: Promise<Config> } | null = null;
+const FULL_CONFIG_QUERY_KEY = '__full__';
+const configCache = new ScopedQueryCache<unknown>();
 
 const SECTION_KEYS: RawConfigSection[] = [
   'debug',
@@ -99,45 +111,158 @@ const extractSectionValue = (config: Config | null, section?: RawConfigSection) 
   }
 };
 
+const hydrateConfigScopeState = (scopeKey: string): Pick<ConfigState, 'config'> => {
+  const fullEntry = configCache.getEntry(scopeKey, FULL_CONFIG_QUERY_KEY);
+  return {
+    config: fullEntry?.data ? (fullEntry.data as Config) : null
+  };
+};
+
+const buildConfigWithSectionValue = (
+  current: Config | null,
+  section: RawConfigSection,
+  value: unknown
+): Config => {
+  const raw = { ...(current?.raw || {}) };
+  raw[section] = value;
+  const nextConfig: Config = { ...(current || {}), raw };
+
+  switch (section) {
+    case 'debug':
+      nextConfig.debug = value as Config['debug'];
+      break;
+    case 'request-retry':
+      nextConfig.requestRetry = value as Config['requestRetry'];
+      break;
+    case 'quota-exceeded':
+      nextConfig.quotaExceeded = value as Config['quotaExceeded'];
+      break;
+    case 'usage-statistics-enabled':
+      nextConfig.usageStatisticsEnabled = value as Config['usageStatisticsEnabled'];
+      break;
+    case 'request-log':
+      nextConfig.requestLog = value as Config['requestLog'];
+      break;
+    case 'logging-to-file':
+      nextConfig.loggingToFile = value as Config['loggingToFile'];
+      break;
+    case 'logs-max-total-size-mb':
+      nextConfig.logsMaxTotalSizeMb = value as Config['logsMaxTotalSizeMb'];
+      break;
+    case 'ws-auth':
+      nextConfig.wsAuth = value as Config['wsAuth'];
+      break;
+    case 'force-model-prefix':
+      nextConfig.forceModelPrefix = value as Config['forceModelPrefix'];
+      break;
+    case 'routing/strategy':
+      nextConfig.routingStrategy = value as Config['routingStrategy'];
+      break;
+    case 'api-keys':
+      nextConfig.apiKeys = value as Config['apiKeys'];
+      break;
+    case 'ampcode':
+      nextConfig.ampcode = value as Config['ampcode'];
+      break;
+    case 'gemini-api-key':
+      nextConfig.geminiApiKeys = value as Config['geminiApiKeys'];
+      break;
+    case 'codex-api-key':
+      nextConfig.codexApiKeys = value as Config['codexApiKeys'];
+      break;
+    case 'claude-api-key':
+      nextConfig.claudeApiKeys = value as Config['claudeApiKeys'];
+      break;
+    case 'vertex-api-key':
+      nextConfig.vertexApiKeys = value as Config['vertexApiKeys'];
+      break;
+    case 'openai-compatibility':
+      nextConfig.openaiCompatibility = value as Config['openaiCompatibility'];
+      break;
+    case 'oauth-excluded-models':
+      nextConfig.oauthExcludedModels = value as Config['oauthExcludedModels'];
+      break;
+    default:
+      break;
+  }
+
+  return nextConfig;
+};
+
+const normalizeFetchConfigOptions = (
+  forceRefreshOrOptions?: boolean | FetchConfigOptions
+): FetchConfigOptions => {
+  if (typeof forceRefreshOrOptions === 'boolean') {
+    return { forceRefresh: forceRefreshOrOptions };
+  }
+  return forceRefreshOrOptions ?? {};
+};
+
 export const useConfigStore = create<ConfigState>((set, get) => ({
   config: null,
-  cache: new Map(),
+  scopeKey: '',
   loading: false,
   error: null,
 
-  fetchConfig: (async (section?: RawConfigSection, forceRefresh: boolean = false) => {
-    const { cache, isCacheValid } = get();
+  fetchConfig: (async (section?: RawConfigSection, forceRefreshOrOptions?: boolean | FetchConfigOptions) => {
+    const options = normalizeFetchConfigOptions(forceRefreshOrOptions);
+    const forceRefresh = options.forceRefresh === true;
+    const scopeKey = options.scopeKey ?? getCurrentSessionScopeKey();
+    const state = get();
+
+    if (state.scopeKey !== scopeKey) {
+      const hydrated = hydrateConfigScopeState(scopeKey);
+      set({
+        ...hydrated,
+        scopeKey,
+        loading: false,
+        error: null
+      });
+    }
 
     // 检查缓存
-    const cacheKey = section || '__full__';
-    if (!forceRefresh && isCacheValid(section)) {
-      const cached = cache.get(cacheKey);
+    const cacheKey = section || FULL_CONFIG_QUERY_KEY;
+    if (!forceRefresh) {
+      const cached = configCache.getFreshEntry(scopeKey, cacheKey, CACHE_EXPIRY_MS);
       if (cached) {
+        if (!section) {
+          set({
+            config: cached.data as Config,
+            scopeKey,
+            loading: false,
+            error: null
+          });
+        }
         return cached.data;
       }
     }
 
     // section 缓存未命中但 full 缓存可用时，直接复用已获取到的配置，避免重复 /config 请求
-    if (!forceRefresh && section && isCacheValid()) {
-      const fullCached = cache.get('__full__');
+    if (!forceRefresh && section) {
+      const fullCached = configCache.getFreshEntry(
+        scopeKey,
+        FULL_CONFIG_QUERY_KEY,
+        CACHE_EXPIRY_MS
+      );
       if (fullCached?.data) {
         return extractSectionValue(fullCached.data as Config, section);
       }
     }
 
     // 同一时刻合并多个 /config 请求（如 StrictMode 或多个页面同时触发）
-    if (inFlightConfigRequest) {
-      const data = await inFlightConfigRequest.promise;
-      return section ? extractSectionValue(data, section) : data;
+    const inFlightRequest = configCache.getInFlight(scopeKey, FULL_CONFIG_QUERY_KEY);
+    if (inFlightRequest) {
+      const data = await inFlightRequest;
+      return section ? extractSectionValue(data as Config, section) : data;
     }
 
     // 获取新数据
-    set({ loading: true, error: null });
+    set({ loading: true, error: null, scopeKey });
 
     const requestId = (configRequestToken += 1);
+    const requestPromise = configApi.getConfig();
+    configCache.setInFlight(scopeKey, FULL_CONFIG_QUERY_KEY, requestPromise);
     try {
-      const requestPromise = configApi.getConfig();
-      inFlightConfigRequest = { id: requestId, promise: requestPromise };
       const data = await requestPromise;
       const now = Date.now();
 
@@ -147,19 +272,19 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       }
 
       // 更新缓存
-      const newCache = new Map(cache);
-      newCache.set('__full__', { data, timestamp: now });
+      configCache.setEntry(scopeKey, FULL_CONFIG_QUERY_KEY, data, now);
       SECTION_KEYS.forEach((key) => {
         const value = extractSectionValue(data, key);
         if (value !== undefined) {
-          newCache.set(key, { data: value, timestamp: now });
+          configCache.setEntry(scopeKey, key, value, now);
         }
       });
 
       set({
         config: data,
-        cache: newCache,
-        loading: false
+        scopeKey,
+        loading: false,
+        error: null
       });
 
       return section ? extractSectionValue(data, section) : data;
@@ -174,118 +299,90 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       }
       throw error;
     } finally {
-      if (inFlightConfigRequest?.id === requestId) {
-        inFlightConfigRequest = null;
-      }
+      configCache.clearInFlight(scopeKey, FULL_CONFIG_QUERY_KEY, requestPromise);
     }
   }) as ConfigState['fetchConfig'],
 
-  updateConfigValue: (section, value) => {
+  updateConfigValue: (section, value, options = {}) => {
+    const targetScopeKey = options.scopeKey ?? (get().scopeKey || getCurrentSessionScopeKey());
     set((state) => {
-      const raw = { ...(state.config?.raw || {}) };
-      raw[section] = value;
-      const nextConfig: Config = { ...(state.config || {}), raw };
+      const isActiveScope = state.scopeKey === targetScopeKey;
+      const nextConfig = buildConfigWithSectionValue(
+        isActiveScope ? state.config : hydrateConfigScopeState(targetScopeKey).config,
+        section,
+        value
+      );
 
-      switch (section) {
-        case 'debug':
-          nextConfig.debug = value as Config['debug'];
-          break;
-        case 'request-retry':
-          nextConfig.requestRetry = value as Config['requestRetry'];
-          break;
-        case 'quota-exceeded':
-          nextConfig.quotaExceeded = value as Config['quotaExceeded'];
-          break;
-        case 'usage-statistics-enabled':
-          nextConfig.usageStatisticsEnabled = value as Config['usageStatisticsEnabled'];
-          break;
-        case 'request-log':
-          nextConfig.requestLog = value as Config['requestLog'];
-          break;
-        case 'logging-to-file':
-          nextConfig.loggingToFile = value as Config['loggingToFile'];
-          break;
-        case 'logs-max-total-size-mb':
-          nextConfig.logsMaxTotalSizeMb = value as Config['logsMaxTotalSizeMb'];
-          break;
-        case 'ws-auth':
-          nextConfig.wsAuth = value as Config['wsAuth'];
-          break;
-        case 'force-model-prefix':
-          nextConfig.forceModelPrefix = value as Config['forceModelPrefix'];
-          break;
-        case 'routing/strategy':
-          nextConfig.routingStrategy = value as Config['routingStrategy'];
-          break;
-        case 'api-keys':
-          nextConfig.apiKeys = value as Config['apiKeys'];
-          break;
-        case 'ampcode':
-          nextConfig.ampcode = value as Config['ampcode'];
-          break;
-        case 'gemini-api-key':
-          nextConfig.geminiApiKeys = value as Config['geminiApiKeys'];
-          break;
-        case 'codex-api-key':
-          nextConfig.codexApiKeys = value as Config['codexApiKeys'];
-          break;
-        case 'claude-api-key':
-          nextConfig.claudeApiKeys = value as Config['claudeApiKeys'];
-          break;
-        case 'vertex-api-key':
-          nextConfig.vertexApiKeys = value as Config['vertexApiKeys'];
-          break;
-        case 'openai-compatibility':
-          nextConfig.openaiCompatibility = value as Config['openaiCompatibility'];
-          break;
-        case 'oauth-excluded-models':
-          nextConfig.oauthExcludedModels = value as Config['oauthExcludedModels'];
-          break;
-        default:
-          break;
+      if (options.invalidateCache === false) {
+        const now = Date.now();
+        configCache.setEntry(targetScopeKey, FULL_CONFIG_QUERY_KEY, nextConfig, now);
+        configCache.setEntry(targetScopeKey, section, value, now);
       }
 
-      return { config: nextConfig };
+      if (!isActiveScope) {
+        return state;
+      }
+
+      return {
+        config: nextConfig,
+        scopeKey: targetScopeKey,
+        error: null,
+        loading: false
+      };
     });
 
-    // 清除该 section 的缓存
-    get().clearCache(section);
+    if (options.invalidateCache !== false) {
+      get().clearCache(section, { scopeKey: targetScopeKey });
+    }
   },
 
-  clearCache: (section) => {
-    const { cache } = get();
-    const newCache = new Map(cache);
+  clearCache: (section, options = {}) => {
+    const activeScopeKey = options.scopeKey ?? (get().scopeKey || getCurrentSessionScopeKey());
 
     if (section) {
-      newCache.delete(section);
+      configCache.deleteEntry(activeScopeKey, section);
       // 同时清除完整配置缓存
-      newCache.delete('__full__');
+      configCache.deleteEntry(activeScopeKey, FULL_CONFIG_QUERY_KEY);
 
       // Section-level invalidation usually follows an optimistic write path. Invalidate any in-flight
       // full fetch so stale responses can't overwrite newer local changes.
       configRequestToken += 1;
-      inFlightConfigRequest = null;
+      configCache.clearInFlight(activeScopeKey, FULL_CONFIG_QUERY_KEY);
 
-      set({ cache: newCache, loading: false, error: null });
+      set((state) => {
+        if (state.scopeKey !== activeScopeKey) {
+          return state;
+        }
+        return {
+          scopeKey: activeScopeKey,
+          loading: false,
+          error: null
+        };
+      });
       return;
-    } else {
-      newCache.clear();
     }
 
     // 清除全部缓存一般代表“切换连接/登出/全量刷新”，需要让 in-flight 的旧请求失效
     configRequestToken += 1;
-    inFlightConfigRequest = null;
+    configCache.clear();
 
-    set({ config: null, cache: newCache, loading: false, error: null });
+    set({
+      config: null,
+      scopeKey: getCurrentSessionScopeKey(),
+      loading: false,
+      error: null
+    });
   },
 
-  isCacheValid: (section) => {
-    const { cache } = get();
-    const cacheKey = section || '__full__';
-    const cached = cache.get(cacheKey);
-
-    if (!cached) return false;
-
-    return Date.now() - cached.timestamp < CACHE_EXPIRY_MS;
+  isCacheValid: (section, scopeKeyOverride) => {
+    const activeScopeKey = scopeKeyOverride ?? getCurrentSessionScopeKey();
+    if (get().scopeKey !== activeScopeKey) {
+      return false;
+    }
+    const cacheKey = section || FULL_CONFIG_QUERY_KEY;
+    return configCache.isFresh(activeScopeKey, cacheKey, CACHE_EXPIRY_MS);
   }
 }));
+
+export const buildConfigScopeKey = (apiBase: string, managementKey: string) =>
+  buildSessionScopeKey(apiBase, managementKey);

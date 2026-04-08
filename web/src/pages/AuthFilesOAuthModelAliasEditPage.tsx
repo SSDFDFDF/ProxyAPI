@@ -9,13 +9,17 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { IconInfo, IconX } from '@/components/ui/icons';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
-import { useAuthStore, useNotificationStore } from '@/stores';
-import { authFilesApi } from '@/services/api';
-import type { AuthFileItem, OAuthModelAliasEntry } from '@/types';
+import {
+  useAuthFilesOauthStore,
+  useAuthFilesStore,
+  useAuthStore,
+  useNotificationStore,
+  useProviderModelDefinitionsStore,
+} from '@/stores';
+import type { OAuthModelAliasEntry } from '@/types';
 import { generateId } from '@/utils/helpers';
 import styles from './AuthFilesOAuthModelAliasEditPage.module.scss';
-
-type AuthFileModelItem = { id: string; display_name?: string; type?: string; owned_by?: string };
+import { deleteOauthModelAlias, saveOauthModelAlias } from '@/domains/authFiles/mutations';
 
 type LocationState = { fromAuthFiles?: boolean } | null;
 
@@ -70,22 +74,27 @@ export function AuthFilesOAuthModelAliasEditPage() {
   const providerFromParams = searchParams.get('provider') ?? '';
 
   const [provider, setProvider] = useState(providerFromParams);
-  const [files, setFiles] = useState<AuthFileItem[]>([]);
-  const [excluded, setExcluded] = useState<Record<string, string[]>>({});
-  const [modelAlias, setModelAlias] = useState<Record<string, OAuthModelAliasEntry[]>>({});
+  const files = useAuthFilesStore((state) => state.files);
+  const loadAuthFiles = useAuthFilesStore((state) => state.loadAuthFiles);
+  const excluded = useAuthFilesOauthStore((state) => state.excluded);
+  const modelAlias = useAuthFilesOauthStore((state) => state.modelAlias);
+  const modelAliasError = useAuthFilesOauthStore((state) => state.modelAliasError);
+  const loadExcluded = useAuthFilesOauthStore((state) => state.loadExcluded);
+  const loadModelAlias = useAuthFilesOauthStore((state) => state.loadModelAlias);
+  const providerModelsByProvider = useProviderModelDefinitionsStore((state) => state.modelsByProvider);
+  const providerModelErrors = useProviderModelDefinitionsStore((state) => state.errorsByProvider);
+  const providerModelsLoading = useProviderModelDefinitionsStore((state) => state.loadingByProvider);
+  const loadProviderModels = useProviderModelDefinitionsStore((state) => state.loadProviderModels);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [modelAliasUnsupported, setModelAliasUnsupported] = useState(false);
 
   const [mappings, setMappings] = useState<OAuthModelMappingFormEntry[]>([buildEmptyMappingEntry()]);
-  const [modelsList, setModelsList] = useState<AuthFileModelItem[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(false);
-  const [modelsError, setModelsError] = useState<'unsupported' | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setProvider(providerFromParams);
   }, [providerFromParams]);
 
+  const modelAliasUnsupported = modelAliasError === 'unsupported';
   const providerOptions = useMemo(() => {
     const extraProviders = new Set<string>();
     Object.keys(excluded).forEach((value) => extraProviders.add(value));
@@ -123,6 +132,12 @@ export function AuthFilesOAuthModelAliasEditPage() {
   );
 
   const resolvedProviderKey = useMemo(() => normalizeProviderKey(provider), [provider]);
+  const modelsList = resolvedProviderKey ? providerModelsByProvider[resolvedProviderKey] ?? [] : [];
+  const modelsLoading =
+    resolvedProviderKey ? providerModelsLoading[resolvedProviderKey] === true : false;
+  const modelsError =
+    resolvedProviderKey ? providerModelErrors[resolvedProviderKey] ?? null : null;
+  const modelsFailed = modelsError === 'failed';
   const title = useMemo(() => t('oauth_model_alias.add_title'), [t]);
   const headerHint = useMemo(() => {
     if (!provider.trim()) {
@@ -134,8 +149,11 @@ export function AuthFilesOAuthModelAliasEditPage() {
     if (modelsError === 'unsupported') {
       return t('oauth_model_alias.model_source_unsupported');
     }
+    if (modelsFailed) {
+      return t('notification.refresh_failed');
+    }
     return t('oauth_model_alias.model_source_loaded', { count: modelsList.length });
-  }, [modelsError, modelsList.length, modelsLoading, provider, t]);
+  }, [modelsError, modelsFailed, modelsList.length, modelsLoading, provider, t]);
 
   const handleBack = useCallback(() => {
     const state = location.state as LocationState;
@@ -163,39 +181,8 @@ export function AuthFilesOAuthModelAliasEditPage() {
 
     const load = async () => {
       setInitialLoading(true);
-      setModelAliasUnsupported(false);
       try {
-        const [filesResult, excludedResult, aliasResult] = await Promise.allSettled([
-          authFilesApi.list(),
-          authFilesApi.getOauthExcludedModels(),
-          authFilesApi.getOauthModelAlias(),
-        ]);
-
-        if (cancelled) return;
-
-        if (filesResult.status === 'fulfilled') {
-          setFiles(filesResult.value?.files ?? []);
-        }
-
-        if (excludedResult.status === 'fulfilled') {
-          setExcluded(excludedResult.value ?? {});
-        }
-
-        if (aliasResult.status === 'fulfilled') {
-          setModelAlias(aliasResult.value ?? {});
-          return;
-        }
-
-        const err = aliasResult.status === 'rejected' ? aliasResult.reason : null;
-        const status =
-          typeof err === 'object' && err !== null && 'status' in err
-            ? (err as { status?: unknown }).status
-            : undefined;
-
-        if (status === 404) {
-          setModelAliasUnsupported(true);
-          return;
-        }
+        await Promise.allSettled([loadAuthFiles(), loadExcluded(), loadModelAlias()]);
       } finally {
         if (!cancelled) {
           setInitialLoading(false);
@@ -212,7 +199,7 @@ export function AuthFilesOAuthModelAliasEditPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAuthFiles, loadExcluded, loadModelAlias]);
 
   useEffect(() => {
     if (!resolvedProviderKey) {
@@ -225,47 +212,14 @@ export function AuthFilesOAuthModelAliasEditPage() {
 
   useEffect(() => {
     if (!resolvedProviderKey || modelAliasUnsupported) {
-      setModelsList([]);
-      setModelsError(null);
-      setModelsLoading(false);
       return;
     }
 
-    let cancelled = false;
-    setModelsLoading(true);
-    setModelsError(null);
-
-    authFilesApi
-      .getModelDefinitions(resolvedProviderKey)
-      .then((models) => {
-        if (cancelled) return;
-        setModelsList(models);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        const status =
-          typeof err === 'object' && err !== null && 'status' in err
-            ? (err as { status?: unknown }).status
-            : undefined;
-
-        if (status === 404) {
-          setModelsList([]);
-          setModelsError('unsupported');
-          return;
-        }
-
-        const errorMessage = err instanceof Error ? err.message : '';
-        showNotification(`${t('notification.load_failed')}: ${errorMessage}`, 'error');
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setModelsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [modelAliasUnsupported, resolvedProviderKey, showNotification, t]);
+    void loadProviderModels(resolvedProviderKey).catch((err: unknown) => {
+      const errorMessage = err instanceof Error ? err.message : t('common.unknown_error');
+      showNotification(`${t('notification.refresh_failed')}: ${errorMessage}`, 'error');
+    });
+  }, [loadProviderModels, modelAliasUnsupported, resolvedProviderKey, showNotification, t]);
 
   const updateProvider = useCallback(
     (value: string) => {
@@ -325,9 +279,9 @@ export function AuthFilesOAuthModelAliasEditPage() {
     setSaving(true);
     try {
       if (normalized.length) {
-        await authFilesApi.saveOauthModelAlias(channel, normalized);
+        await saveOauthModelAlias(channel, normalized);
       } else {
-        await authFilesApi.deleteOauthModelAlias(channel);
+        await deleteOauthModelAlias(channel);
       }
       showNotification(t('oauth_model_alias.save_success'), 'success');
       handleBack();

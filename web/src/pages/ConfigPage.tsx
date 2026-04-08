@@ -160,7 +160,7 @@ export function ConfigPage() {
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
-      showNotification(`${t('notification.save_failed')}: ${message}`, 'error');
+      showNotification(`${t('notification.update_failed')}: ${message}`, 'error');
     } finally {
       setSaving(false);
     }
@@ -223,7 +223,7 @@ export function ConfigPage() {
       setDiffModalOpen(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
-      showNotification(`${t('notification.save_failed')}: ${message}`, 'error');
+      showNotification(`${t('notification.update_failed')}: ${message}`, 'error');
     } finally {
       setSaving(false);
     }
@@ -437,7 +437,7 @@ export function ConfigPage() {
     if (hasVisualModeError)
       return t('config_management.visual_mode_unavailable_short', { defaultValue: 'YAML issue' });
     if (hasVisualValidationErrors)
-      return t('config_management.visual.validation_blocked_short', { defaultValue: 'Fix errors' });
+      return t('config_management.visual.validation.validation_blocked');
     if (saving) return t('config_management.status_saving_short', { defaultValue: 'Saving' });
     if (isDirty) return t('config_management.status_dirty_short', { defaultValue: 'Unsaved' });
     return t('config_management.status_loaded_short', { defaultValue: 'Loaded' });

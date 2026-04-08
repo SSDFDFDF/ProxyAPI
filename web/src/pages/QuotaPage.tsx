@@ -10,16 +10,9 @@ import { FilterTabs, type FilterTabItem } from '@/components/ui/FilterTabs';
 import { PageTitleBlock } from '@/components/ui/PageTitleBlock';
 import { IconEye, IconEyeOff } from '@/components/ui/icons';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
-import { useAuthStore, useThemeStore } from '@/stores';
-import { authFilesApi, configFileApi } from '@/services/api';
-import {
-  QuotaSection,
-  ANTIGRAVITY_CONFIG,
-  CLAUDE_CONFIG,
-  CODEX_CONFIG,
-  GEMINI_CLI_CONFIG,
-  KIMI_CONFIG,
-} from '@/components/quota';
+import { useAuthFilesStore, useAuthStore, useThemeStore } from '@/stores';
+import { configFileApi } from '@/services/api';
+import { QuotaSection, ANTIGRAVITY_CONFIG, CLAUDE_CONFIG, CODEX_CONFIG, GEMINI_CLI_CONFIG, KIMI_CONFIG } from '@/components/quota';
 import type { AuthFileItem } from '@/types';
 import {
   getAuthFileIcon,
@@ -47,9 +40,11 @@ export function QuotaPage() {
   const { t } = useTranslation();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
+  const files = useAuthFilesStore((state) => state.files);
+  const loading = useAuthFilesStore((state) => state.loading);
+  const authFilesError = useAuthFilesStore((state) => state.error);
+  const loadAuthFiles = useAuthFilesStore((state) => state.loadAuthFiles);
 
-  const [files, setFiles] = useState<AuthFileItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('claude');
   const [includeDisabled, setIncludeDisabled] = useState(false);
@@ -94,43 +89,50 @@ export function QuotaPage() {
     [activeTab, quotaTabs, resolvedTheme]
   );
 
-  const activeConfig = quotaTabs.find((tab) => tab.id === activeTab)?.config;
+  const activeConfig = quotaTabs.find((tab) => tab.id === activeTab)?.config ?? null;
 
   const disableControls = connectionStatus !== 'connected';
 
   const loadConfig = useCallback(async () => {
     try {
       await configFileApi.fetchConfigYaml();
+      setError('');
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : t('notification.refresh_failed');
-      setError((prev) => prev || errorMessage);
+      setError(errorMessage);
     }
   }, [t]);
 
   const loadFiles = useCallback(async () => {
-    setLoading(true);
-    setError('');
     try {
-      const data = await authFilesApi.list();
-      setFiles(data?.files || []);
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : t('notification.refresh_failed');
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+      await loadAuthFiles();
+    } catch {
+      // canonical error is captured in store
     }
-  }, [t]);
+  }, [loadAuthFiles]);
 
   const handleHeaderRefresh = useCallback(async () => {
-    await Promise.all([loadConfig(), loadFiles()]);
-  }, [loadConfig, loadFiles]);
+    await Promise.all([loadConfig(), loadAuthFiles({ force: true })]);
+  }, [loadAuthFiles, loadConfig]);
 
   useHeaderRefresh(handleHeaderRefresh);
 
   useEffect(() => {
-    loadFiles();
-    loadConfig();
-  }, [loadFiles, loadConfig]);
+    void loadFiles();
+  }, [loadFiles]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+      void loadConfig();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadConfig]);
 
   return (
     <div className={styles.container}>
@@ -153,30 +155,81 @@ export function QuotaPage() {
             aria-pressed={includeDisabled}
             title={t('quota_management.include_disabled')}
           >
-            <>
-              {includeDisabled ? <IconEye size={16} /> : <IconEyeOff size={16} />}
-              {t('quota_management.include_disabled')}
-            </>
+            {includeDisabled ? <IconEye size={16} /> : <IconEyeOff size={16} />}
+            {t('quota_management.include_disabled')}
           </Button>
         </div>
       </div>
 
-      {error && <div className={styles.errorBox}>{error}</div>}
+      {(error || authFilesError) && <div className={styles.errorBox}>{error || authFilesError}</div>}
 
       <PageFilterSection className={styles.filterSection}>
         <FilterTabs items={quotaTabItems} />
       </PageFilterSection>
 
-      {activeConfig && (
-        <QuotaSection
-          key={activeConfig.type}
-          config={activeConfig as any}
-          files={files}
-          loading={loading}
-          disabled={disableControls}
-          includeDisabled={includeDisabled}
-        />
-      )}
+      {(() => {
+        if (!activeConfig) return null;
+
+        switch (activeConfig.type) {
+          case 'claude':
+            return (
+              <QuotaSection
+                key={activeConfig.type}
+                config={CLAUDE_CONFIG}
+                files={files}
+                loading={loading}
+                disabled={disableControls}
+                includeDisabled={includeDisabled}
+              />
+            );
+          case 'antigravity':
+            return (
+              <QuotaSection
+                key={activeConfig.type}
+                config={ANTIGRAVITY_CONFIG}
+                files={files}
+                loading={loading}
+                disabled={disableControls}
+                includeDisabled={includeDisabled}
+              />
+            );
+          case 'codex':
+            return (
+              <QuotaSection
+                key={activeConfig.type}
+                config={CODEX_CONFIG}
+                files={files}
+                loading={loading}
+                disabled={disableControls}
+                includeDisabled={includeDisabled}
+              />
+            );
+          case 'gemini-cli':
+            return (
+              <QuotaSection
+                key={activeConfig.type}
+                config={GEMINI_CLI_CONFIG}
+                files={files}
+                loading={loading}
+                disabled={disableControls}
+                includeDisabled={includeDisabled}
+              />
+            );
+          case 'kimi':
+            return (
+              <QuotaSection
+                key={activeConfig.type}
+                config={KIMI_CONFIG}
+                files={files}
+                loading={loading}
+                disabled={disableControls}
+                includeDisabled={includeDisabled}
+              />
+            );
+          default:
+            return null;
+        }
+      })()}
     </div>
   );
 }

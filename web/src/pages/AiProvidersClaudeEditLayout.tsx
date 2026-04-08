@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
-import { providersApi } from '@/services/api';
 import { useAuthStore, useClaudeEditDraftStore, useConfigStore, useNotificationStore } from '@/stores';
 import type { ProviderKeyConfig } from '@/types';
 import type { ModelInfo } from '@/utils/models';
@@ -11,6 +10,7 @@ import type { ModelEntry, ProviderFormState } from '@/components/providers/types
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
 import { excludedModelsToText, parseExcludedModels } from '@/components/providers/utils';
 import { modelsToEntries } from '@/components/ui/modelInputListUtils';
+import { saveClaudeProviderList } from '@/domains/providers/mutations';
 
 type LocationState = { fromAiProviders?: boolean } | null;
 
@@ -120,8 +120,6 @@ export function AiProvidersClaudeEditLayout() {
   const config = useConfigStore((state) => state.config);
   const fetchConfig = useConfigStore((state) => state.fetchConfig);
   const isCacheValid = useConfigStore((state) => state.isCacheValid);
-  const updateConfigValue = useConfigStore((state) => state.updateConfigValue);
-  const clearCache = useConfigStore((state) => state.clearCache);
 
   const [configs, setConfigs] = useState<ProviderKeyConfig[]>(() => config?.claudeApiKeys ?? []);
   const [loading, setLoading] = useState(() => !isCacheValid('claude-api-key'));
@@ -136,6 +134,7 @@ export function AiProvidersClaudeEditLayout() {
   const draft = useClaudeEditDraftStore((state) => state.drafts[draftKey]);
   const acquireDraft = useClaudeEditDraftStore((state) => state.acquireDraft);
   const releaseDraft = useClaudeEditDraftStore((state) => state.releaseDraft);
+  const clearDraft = useClaudeEditDraftStore((state) => state.clearDraft);
   const initDraft = useClaudeEditDraftStore((state) => state.initDraft);
   const setDraftBaselineSignature = useClaudeEditDraftStore((state) => state.setDraftBaselineSignature);
   const setDraftForm = useClaudeEditDraftStore((state) => state.setDraftForm);
@@ -181,6 +180,20 @@ export function AiProvidersClaudeEditLayout() {
     return configs[editIndex];
   }, [configs, editIndex]);
 
+  const initialSignature = useMemo(() => {
+    if (initialData) {
+      const seededForm: ProviderFormState = {
+        ...initialData,
+        headers: headersToEntries(initialData.headers),
+        modelEntries: modelsToEntries(initialData.models),
+        excludedText: excludedModelsToText(initialData.excludedModels),
+      };
+      return buildClaudeSignature(seededForm);
+    }
+
+    return buildClaudeSignature(buildEmptyForm());
+  }, [initialData]);
+
   const invalidIndex = editIndex !== null && !initialData;
 
   const availableModels = useMemo(
@@ -216,8 +229,8 @@ export function AiProvidersClaudeEditLayout() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        const message = getErrorMessage(err) || t('notification.refresh_failed');
-        showNotification(`${t('notification.load_failed')}: ${message}`, 'error');
+        const message = getErrorMessage(err) || t('common.unknown_error');
+        showNotification(`${t('notification.refresh_failed')}: ${message}`, 'error');
       })
       .finally(() => {
         if (cancelled) return;
@@ -231,7 +244,12 @@ export function AiProvidersClaudeEditLayout() {
 
   useEffect(() => {
     if (loading) return;
-    if (draft?.initialized) return;
+
+    if (draft?.initialized && draft.baselineSignature === initialSignature) {
+      return;
+    }
+
+    clearDraft(draftKey);
 
     if (initialData) {
       const seededForm: ProviderFormState = {
@@ -241,9 +259,8 @@ export function AiProvidersClaudeEditLayout() {
         excludedText: excludedModelsToText(initialData.excludedModels),
       };
       const available = seededForm.modelEntries.map((entry) => entry.name.trim()).filter(Boolean);
-      const baselineSignature = buildClaudeSignature(seededForm);
       initDraft(draftKey, {
-        baselineSignature,
+        baselineSignature: initialSignature,
         form: seededForm,
         testModel: available[0] || '',
         testStatus: 'idle',
@@ -254,13 +271,13 @@ export function AiProvidersClaudeEditLayout() {
 
     const emptyForm = buildEmptyForm();
     initDraft(draftKey, {
-      baselineSignature: buildClaudeSignature(emptyForm),
+      baselineSignature: initialSignature,
       form: emptyForm,
       testModel: '',
       testStatus: 'idle',
       testMessage: '',
     });
-  }, [draft?.initialized, draftKey, initDraft, initialData, loading]);
+  }, [clearDraft, draft?.baselineSignature, draft?.initialized, draftKey, initDraft, initialData, initialSignature, loading]);
 
   const resolvedLoading = !draft?.initialized;
   const currentSignature = useMemo(() => buildClaudeSignature(form), [form]);
@@ -375,10 +392,8 @@ export function AiProvidersClaudeEditLayout() {
           ? configs.map((item, idx) => (idx === editIndex ? payload : item))
           : [...configs, payload];
 
-      await providersApi.saveClaudeConfigs(nextList);
+      await saveClaudeProviderList(nextList, configs);
       setConfigs(nextList);
-      updateConfigValue('claude-api-key', nextList);
-      clearCache('claude-api-key');
       showNotification(
         editIndex !== null ? t('notification.claude_config_updated') : t('notification.claude_config_added'),
         'success'
@@ -393,7 +408,6 @@ export function AiProvidersClaudeEditLayout() {
     }
   }, [
     allowNextNavigation,
-    clearCache,
     configs,
     draftKey,
     disableControls,
@@ -407,7 +421,6 @@ export function AiProvidersClaudeEditLayout() {
     saving,
     showNotification,
     t,
-    updateConfigValue,
   ]);
 
   return (

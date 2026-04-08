@@ -17,6 +17,8 @@ import { excludedModelsToText, parseExcludedModels } from '@/components/provider
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
 import type { VertexFormState } from '@/components/providers';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
+import { syncConfigSectionSnapshot } from '@/domains/config/mutations';
+import { saveVertexProviderList } from '@/domains/providers/mutations';
 
 type LocationState = { fromAiProviders?: boolean } | null;
 
@@ -71,8 +73,6 @@ export function AiProvidersVertexEditPage() {
   const disableControls = connectionStatus !== 'connected';
 
   const fetchConfig = useConfigStore((state) => state.fetchConfig);
-  const updateConfigValue = useConfigStore((state) => state.updateConfigValue);
-  const clearCache = useConfigStore((state) => state.clearCache);
 
   const [configs, setConfigs] = useState<ProviderKeyConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,18 +121,26 @@ export function AiProvidersVertexEditPage() {
     setLoading(true);
     setError('');
 
-    Promise.all([fetchConfig('vertex-api-key'), providersApi.getVertexConfigs()])
+    Promise.allSettled([fetchConfig('vertex-api-key'), providersApi.getVertexConfigs()])
       .then(([configResult, vertexResult]) => {
         if (cancelled) return;
 
-        const list = Array.isArray(vertexResult)
-          ? (vertexResult as ProviderKeyConfig[])
-          : Array.isArray(configResult)
-            ? (configResult as ProviderKeyConfig[])
+        const configList =
+          configResult.status === 'fulfilled' && Array.isArray(configResult.value)
+            ? (configResult.value as ProviderKeyConfig[])
             : [];
+        const vertexList =
+          vertexResult.status === 'fulfilled' && Array.isArray(vertexResult.value)
+            ? (vertexResult.value as ProviderKeyConfig[])
+            : [];
+        const list = vertexList.length > 0 ? vertexList : configList;
+
+        if (vertexResult.status === 'rejected' && configResult.status === 'rejected') {
+          throw vertexResult.reason ?? configResult.reason;
+        }
+
         setConfigs(list);
-        updateConfigValue('vertex-api-key', list);
-        clearCache('vertex-api-key');
+        syncConfigSectionSnapshot('vertex-api-key', list);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -147,7 +155,7 @@ export function AiProvidersVertexEditPage() {
     return () => {
       cancelled = true;
     };
-  }, [clearCache, fetchConfig, t, updateConfigValue]);
+  }, [fetchConfig, t]);
 
   useEffect(() => {
     if (loading) return;
@@ -222,9 +230,7 @@ export function AiProvidersVertexEditPage() {
           ? configs.map((item, idx) => (idx === editIndex ? payload : item))
           : [...configs, payload];
 
-      await providersApi.saveVertexConfigs(nextList);
-      updateConfigValue('vertex-api-key', nextList);
-      clearCache('vertex-api-key');
+      await saveVertexProviderList(nextList, configs);
       showNotification(
         editIndex !== null ? t('notification.vertex_config_updated') : t('notification.vertex_config_added'),
         'success'
@@ -242,14 +248,12 @@ export function AiProvidersVertexEditPage() {
   }, [
     allowNextNavigation,
     canSave,
-    clearCache,
     configs,
     editIndex,
     form,
     handleBack,
     showNotification,
     t,
-    updateConfigValue,
   ]);
 
   return (

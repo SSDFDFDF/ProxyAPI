@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/icons';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { authFilesApi } from '@/services/api';
+import { patchAuthFileFields, saveAuthFileJsonObject } from '@/domains/authFiles/mutations';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatFileSize } from '@/utils/format';
 import { calculateStatusBarData, normalizeAuthIndex } from '@/utils/usage';
@@ -234,6 +235,7 @@ export function AuthFilesPage() {
     excludedError,
     modelAlias,
     modelAliasError,
+    providerModelErrors,
     allProviderModels,
     loadExcluded,
     loadModelAlias,
@@ -267,7 +269,6 @@ export function AuthFilesPage() {
     handlePrefixProxySave,
   } = useAuthFilesPrefixProxyEditor({
     disableControls: connectionStatus !== 'connected',
-    loadFiles,
     loadKeyStats: refreshKeyStats,
   });
 
@@ -394,13 +395,12 @@ export function AuthFilesPage() {
       if (!isAuthFilesSortMode(value) || value === sortMode) return;
       setSortMode(value);
       setPage(1);
-      void loadFiles().catch(() => {});
     },
-    [loadFiles, sortMode]
+    [sortMode]
   );
 
   const handleHeaderRefresh = useCallback(async () => {
-    await Promise.all([loadFiles(), refreshKeyStats(), loadExcluded(), loadModelAlias()]);
+    await Promise.all([loadFiles(true), refreshKeyStats(), loadExcluded(true), loadModelAlias(true)]);
   }, [loadFiles, refreshKeyStats, loadExcluded, loadModelAlias]);
 
   useHeaderRefresh(handleHeaderRefresh);
@@ -665,13 +665,16 @@ export function AuthFilesPage() {
                 ? 0
                 : Number.parseInt(trimmed, 10);
 
-            return authFilesApi.patchFields({
-              name,
-              ...(batchFields.prefix.enabled ? { prefix: batchFields.prefix.value } : {}),
-              ...(batchFields.proxyUrl.enabled ? { proxy_url: batchFields.proxyUrl.value } : {}),
-              ...(batchFields.note.enabled ? { note: batchFields.note.value } : {}),
-              ...(batchFields.priority.enabled ? { priority: priorityValue ?? 0 } : {}),
-            });
+            return patchAuthFileFields(
+              {
+                name,
+                ...(batchFields.prefix.enabled ? { prefix: batchFields.prefix.value } : {}),
+                ...(batchFields.proxyUrl.enabled ? { proxy_url: batchFields.proxyUrl.value } : {}),
+                ...(batchFields.note.enabled ? { note: batchFields.note.value } : {}),
+                ...(batchFields.priority.enabled ? { priority: priorityValue ?? 0 } : {}),
+              },
+              { refresh: false }
+            );
           }
 
           const json = await authFilesApi.downloadJsonObject(name);
@@ -707,14 +710,14 @@ export function AuthFilesPage() {
               },
             }
           );
-          return authFilesApi.saveJsonObject(name, nextJson);
+          return saveAuthFileJsonObject(name, nextJson, { refresh: false });
         })
       );
 
       const successCount = results.filter((result) => result.status === 'fulfilled').length;
       const failedCount = results.length - successCount;
 
-      await loadFiles();
+      await loadFiles(true);
       await refreshKeyStats();
 
       if (failedCount === 0) {
@@ -1172,7 +1175,7 @@ export function AuthFilesPage() {
             <th className={styles.compactTableQuotaCol}>{t('nav.quota_management')}</th>
             <th className={styles.compactTableHealthCol}>{t('auth_files.health_status_label')}</th>
             <th className={styles.compactTableActionsCol}>
-              {t('common.actions', { defaultValue: '操作' })}
+              {t('common.action')}
             </th>
           </tr>
         </thead>
@@ -1204,7 +1207,7 @@ export function AuthFilesPage() {
                   ? styles.stateBadgeWarning
                   : styles.stateBadgeActive;
             const authIndexKey =
-              normalizeAuthIndex(file['auth_index'] ?? file.authIndex ?? null) ?? '';
+              normalizeAuthIndex(file.authIndex ?? null) ?? '';
             const statusData = statusBarCache.get(authIndexKey) ?? calculateStatusBarData([]);
 
             return (
@@ -1381,7 +1384,7 @@ export function AuthFilesPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDownload(file.name)}
-                      title={t('common.download')}
+                      title={t('auth_files.download_button')}
                     >
                       <IconDownload size={14} />
                     </Button>
@@ -1668,6 +1671,7 @@ export function AuthFilesPage() {
           onEditProvider={openModelAliasEditor}
           onDeleteProvider={deleteModelAlias}
           modelAliasError={modelAliasError}
+          providerModelErrors={providerModelErrors}
           modelAlias={modelAlias}
           allProviderModels={allProviderModels}
           onUpdate={handleMappingUpdate}

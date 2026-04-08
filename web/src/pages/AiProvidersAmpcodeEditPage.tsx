@@ -9,17 +9,19 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
-import { ampcodeApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
-import type { AmpcodeConfig } from '@/types';
 import { maskApiKey } from '@/utils/format';
 import {
   buildAmpcodeFormState,
-  entriesToAmpcodeMappings,
   entriesToAmpcodeUpstreamApiKeys,
 } from '@/components/providers/utils';
 import type { AmpcodeFormState } from '@/components/providers';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
+import {
+  clearAmpcodeUpstreamApiKey as clearAmpcodeUpstreamApiKeyMutation,
+  fetchAmpcodeConfig,
+  saveAmpcodeConfig,
+} from '@/domains/ampcode/mutations';
 
 type LocationState = { fromAiProviders?: boolean } | null;
 
@@ -62,8 +64,6 @@ export function AiProvidersAmpcodeEditPage() {
   const disableControls = connectionStatus !== 'connected';
 
   const config = useConfigStore((state) => state.config);
-  const updateConfigValue = useConfigStore((state) => state.updateConfigValue);
-  const clearCache = useConfigStore((state) => state.clearCache);
 
   const [form, setForm] = useState<AmpcodeFormState>(() => buildAmpcodeFormState(null));
   const [loading, setLoading] = useState(false);
@@ -123,12 +123,10 @@ export function AiProvidersAmpcodeEditPage() {
 
     void (async () => {
       try {
-        const ampcode = await ampcodeApi.getAmpcode();
+        const ampcode = await fetchAmpcodeConfig();
         if (!mountedRef.current) return;
 
         setLoaded(true);
-        updateConfigValue('ampcode', ampcode);
-        clearCache('ampcode');
         const nextForm = buildAmpcodeFormState(ampcode);
         setForm(nextForm);
         setBaselineSignature(buildAmpcodeSignature(nextForm));
@@ -141,7 +139,7 @@ export function AiProvidersAmpcodeEditPage() {
         }
       }
     })();
-  }, [clearCache, t, updateConfigValue]);
+  }, [t]);
 
   const currentSignature = useMemo(() => buildAmpcodeSignature(form), [form]);
   const isDirty = baselineSignature !== currentSignature;
@@ -172,12 +170,7 @@ export function AiProvidersAmpcodeEditPage() {
         setSaving(true);
         setError('');
         try {
-          await ampcodeApi.clearUpstreamApiKey();
-          const previous = config?.ampcode ?? {};
-          const next: AmpcodeConfig = { ...previous };
-          delete next.upstreamApiKey;
-          updateConfigValue('ampcode', next);
-          clearCache('ampcode');
+          await clearAmpcodeUpstreamApiKeyMutation(config?.ampcode ?? {});
           showNotification(t('notification.ampcode_upstream_api_key_cleared'), 'success');
         } catch (err: unknown) {
           const message = getErrorMessage(err);
@@ -194,73 +187,12 @@ export function AiProvidersAmpcodeEditPage() {
     setSaving(true);
     setError('');
     try {
-      const upstreamUrl = form.upstreamUrl.trim();
-      const overrideKey = form.upstreamApiKey.trim();
-      const upstreamApiKeys = entriesToAmpcodeUpstreamApiKeys(form.upstreamApiKeyEntries);
-      const modelMappings = entriesToAmpcodeMappings(form.mappingEntries);
-
-      if (upstreamUrl) {
-        await ampcodeApi.updateUpstreamUrl(upstreamUrl);
-      } else {
-        await ampcodeApi.clearUpstreamUrl();
-      }
-
-      await ampcodeApi.updateForceModelMappings(form.forceModelMappings);
-
-      if (loaded || upstreamApiKeysDirty) {
-        if (upstreamApiKeys.length) {
-          await ampcodeApi.saveUpstreamApiKeys(upstreamApiKeys);
-        } else {
-          await ampcodeApi.deleteUpstreamApiKeys([]);
-        }
-      }
-
-      if (loaded || modelMappingsDirty) {
-        if (modelMappings.length) {
-          await ampcodeApi.saveModelMappings(modelMappings);
-        } else {
-          await ampcodeApi.clearModelMappings();
-        }
-      }
-
-      if (overrideKey) {
-        await ampcodeApi.updateUpstreamApiKey(overrideKey);
-      }
-
-      const previous = config?.ampcode ?? {};
-      const next: AmpcodeConfig = {
-        ...previous,
-        forceModelMappings: form.forceModelMappings,
-      };
-
-      if (upstreamUrl) {
-        next.upstreamUrl = upstreamUrl;
-      } else {
-        delete next.upstreamUrl;
-      }
-
-      if (overrideKey) {
-        next.upstreamApiKey = overrideKey;
-      }
-
-      if (loaded || upstreamApiKeysDirty) {
-        if (upstreamApiKeys.length) {
-          next.upstreamApiKeys = upstreamApiKeys;
-        } else {
-          delete next.upstreamApiKeys;
-        }
-      }
-
-      if (loaded || modelMappingsDirty) {
-        if (modelMappings.length) {
-          next.modelMappings = modelMappings;
-        } else {
-          delete next.modelMappings;
-        }
-      }
-
-      updateConfigValue('ampcode', next);
-      clearCache('ampcode');
+      await saveAmpcodeConfig(form, {
+        loaded,
+        upstreamApiKeysDirty,
+        modelMappingsDirty,
+        previousConfig: config?.ampcode ?? {},
+      });
       showNotification(t('notification.ampcode_updated'), 'success');
       allowNextNavigation();
       setBaselineSignature(buildAmpcodeSignature(form));

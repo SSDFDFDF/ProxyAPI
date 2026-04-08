@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import { authFilesApi } from '@/services/api';
 import { apiClient } from '@/services/api/client';
-import { useNotificationStore } from '@/stores';
+import { useAuthFilesStore, useNotificationStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
 import { formatFileSize } from '@/utils/format';
 import { MAX_AUTH_FILE_SIZE } from '@/utils/constants';
@@ -12,6 +11,14 @@ import {
   hasAuthFileStatusMessage,
   isRuntimeOnlyAuthFile,
 } from '@/features/authFiles/constants';
+import {
+  deleteAllAuthFiles,
+  deleteAuthFile,
+  deleteAuthFiles,
+  setAuthFileStatus,
+  setManyAuthFilesStatus,
+  uploadAuthFiles,
+} from '@/domains/authFiles/mutations';
 
 type DeleteAllOptions = {
   filter: string;
@@ -32,7 +39,7 @@ export type UseAuthFilesDataResult = {
   statusUpdating: Record<string, boolean>;
   batchStatusUpdating: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
-  loadFiles: () => Promise<void>;
+  loadFiles: (force?: boolean) => Promise<void>;
   handleUploadClick: () => void;
   handleFileChange: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   handleDelete: (name: string) => void;
@@ -56,10 +63,12 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
   const { refreshKeyStats } = options;
   const { t } = useTranslation();
   const { showNotification, showConfirmation } = useNotificationStore();
+  const files = useAuthFilesStore((state) => state.files);
+  const loading = useAuthFilesStore((state) => state.loading);
+  const error = useAuthFilesStore((state) => state.error);
+  const loadAuthFiles = useAuthFilesStore((state) => state.loadAuthFiles);
+  const updateAuthFiles = useAuthFilesStore((state) => state.updateAuthFiles);
 
-  const [files, setFiles] = useState<AuthFileItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -128,7 +137,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     if (deletedNames.length === 0) return;
 
     const deletedSet = new Set(deletedNames);
-    setFiles((prev) => prev.filter((file) => !deletedSet.has(file.name)));
+    updateAuthFiles((prev) => prev.filter((file) => !deletedSet.has(file.name)));
     setSelectedFiles((prev) => {
       if (prev.size === 0) return prev;
       let changed = false;
@@ -142,7 +151,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
       });
       return changed ? next : prev;
     });
-  }, []);
+  }, [updateAuthFiles]);
 
   useEffect(() => {
     if (selectedFiles.size === 0) return;
@@ -161,19 +170,13 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     });
   }, [files, selectedFiles.size]);
 
-  const loadFiles = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const loadFiles = useCallback(async (force: boolean = false) => {
     try {
-      const data = await authFilesApi.list();
-      setFiles(data?.files || []);
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : t('notification.refresh_failed');
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+      await loadAuthFiles({ force });
+    } catch {
+      // Store already captures the canonical error state.
     }
-  }, [t]);
+  }, [loadAuthFiles]);
 
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -218,7 +221,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
 
       setUploading(true);
       try {
-        const result = await authFilesApi.uploadFiles(validFiles);
+        const result = await uploadAuthFiles(validFiles);
         const successCount = result.uploaded;
 
         if (successCount > 0) {
@@ -227,7 +230,6 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
             `${t('auth_files.upload_success')}${suffix}`,
             result.failed.length ? 'warning' : 'success'
           );
-          await loadFiles();
           await refreshKeyStats();
         }
 
@@ -245,20 +247,20 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
         event.target.value = '';
       }
     },
-    [loadFiles, refreshKeyStats, showNotification, t]
+    [refreshKeyStats, showNotification, t]
   );
 
   const handleDelete = useCallback(
     (name: string) => {
       showConfirmation({
-        title: t('auth_files.delete_title', { defaultValue: 'Delete File' }),
+        title: t('common.delete'),
         message: `${t('auth_files.delete_confirm')} "${name}" ?`,
         variant: 'danger',
         confirmText: t('common.confirm'),
         onConfirm: async () => {
           setDeleting(name);
           try {
-            const result = await authFilesApi.deleteFile(name);
+            const result = await deleteAuthFile(name);
             showNotification(t('auth_files.delete_success'), 'success');
             applyDeletedFiles(result.files.length > 0 ? result.files : [name]);
           } catch (err: unknown) {
@@ -288,7 +290,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
           : t('auth_files.delete_all_confirm');
 
       showConfirmation({
-        title: t('auth_files.delete_all_title', { defaultValue: 'Delete All Files' }),
+        title: t('common.delete'),
         message: confirmMessage,
         variant: 'danger',
         confirmText: t('common.confirm'),
@@ -296,9 +298,8 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
           setDeletingAll(true);
           try {
             if (!isFiltered && !isProblemOnly) {
-              await authFilesApi.deleteAll();
+              await deleteAllAuthFiles();
               showNotification(t('auth_files.delete_all_success'), 'success');
-              setFiles((prev) => prev.filter((file) => isRuntimeOnlyAuthFile(file)));
               deselectAll();
             } else {
               const filesToDelete = files.filter((file) => {
@@ -319,7 +320,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
                 return;
               }
 
-              const result = await authFilesApi.deleteFiles(
+              const result = await deleteAuthFiles(
                 filesToDelete.map((file) => file.name)
               );
               const success = result.deleted;
@@ -401,16 +402,11 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     async (item: AuthFileItem, enabled: boolean) => {
       const name = item.name;
       const nextDisabled = !enabled;
-      const previousDisabled = item.disabled === true;
 
       setStatusUpdating((prev) => ({ ...prev, [name]: true }));
-      setFiles((prev) => prev.map((f) => (f.name === name ? { ...f, disabled: nextDisabled } : f)));
 
       try {
-        const res = await authFilesApi.setStatus(name, nextDisabled);
-        setFiles((prev) =>
-          prev.map((f) => (f.name === name ? { ...f, disabled: res.disabled } : f))
-        );
+        await setAuthFileStatus(name, nextDisabled);
         showNotification(
           enabled
             ? t('auth_files.status_enabled_success', { name })
@@ -419,9 +415,6 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
         );
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : '';
-        setFiles((prev) =>
-          prev.map((f) => (f.name === name ? { ...f, disabled: previousDisabled } : f))
-        );
         showNotification(`${t('notification.update_failed')}: ${errorMessage}`, 'error');
       } finally {
         setStatusUpdating((prev) => {
@@ -463,43 +456,11 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
         });
         return next;
       });
-      setFiles((prev) =>
-        prev.map((file) =>
-          targetNames.has(file.name) ? { ...file, disabled: nextDisabled } : file
-        )
-      );
 
       try {
-        const results = await Promise.allSettled(
-          targetNameList.map((name) => authFilesApi.setStatus(name, nextDisabled))
-        );
-
-        let successCount = 0;
-        let failCount = 0;
-        const failedNames = new Set<string>();
-        const confirmedDisabled = new Map<string, boolean>();
-
-        results.forEach((result, index) => {
-          const name = targetNameList[index];
-          if (result.status === 'fulfilled') {
-            successCount++;
-            confirmedDisabled.set(name, result.value.disabled);
-          } else {
-            failCount++;
-            failedNames.add(name);
-          }
-        });
-
-        setFiles((prev) =>
-          prev.map((file) => {
-            if (failedNames.has(file.name)) {
-              return { ...file, disabled: originalDisabled.get(file.name) === true };
-            }
-            if (confirmedDisabled.has(file.name)) {
-              return { ...file, disabled: confirmedDisabled.get(file.name) };
-            }
-            return file;
-          })
+        const { successCount, failCount } = await setManyAuthFilesStatus(
+          targetNameList,
+          nextDisabled
         );
 
         if (failCount === 0) {
@@ -576,7 +537,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
         confirmText: t('common.confirm'),
         onConfirm: async () => {
           try {
-            const result = await authFilesApi.deleteFiles(uniqueNames);
+            const result = await deleteAuthFiles(uniqueNames);
             applyDeletedFiles(result.files);
 
             if (result.failed.length === 0) {
@@ -609,7 +570,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     selectedFiles,
     selectionCount,
     loading,
-    error,
+    error: error || '',
     uploading,
     deleting,
     deletingAll,

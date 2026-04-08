@@ -54,16 +54,19 @@ export function useAuthFilesModels(): UseAuthFilesModelsResult {
         const models = await authFilesApi.getModelsForAuthFile(item.name);
         modelsCacheRef.current.set(item.name, models);
         setModelsList(models);
-      } catch (err) {
+      } catch (err: unknown) {
+        const status =
+          typeof err === 'object' && err !== null && 'status' in err
+            ? (err as { status?: unknown }).status
+            : undefined;
         const errorMessage = err instanceof Error ? err.message : '';
-        if (
-          errorMessage.includes('404') ||
-          errorMessage.includes('not found') ||
-          errorMessage.includes('Not Found')
-        ) {
+        if (status === 404) {
           setModelsError('unsupported');
         } else {
-          showNotification(`${t('notification.load_failed')}: ${errorMessage}`, 'error');
+          showNotification(
+            `${t('notification.refresh_failed')}: ${errorMessage || t('common.unknown_error')}`,
+            'error'
+          );
         }
       } finally {
         setModelsLoading(false);

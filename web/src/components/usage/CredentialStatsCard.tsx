@@ -62,7 +62,7 @@ export function CredentialStatsCard({
         if (!Array.isArray(files)) return;
         const map = new Map<string, CredentialInfo>();
         files.forEach((file) => {
-          const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+          const rawAuthIndex = file.authIndex;
           const key = normalizeAuthIndex(rawAuthIndex);
           if (key) {
             map.set(key, {

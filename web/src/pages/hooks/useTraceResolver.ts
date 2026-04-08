@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { authFilesApi } from '@/services/api/authFiles';
-import { USAGE_STATS_STALE_TIME_MS, useUsageStatsStore } from '@/stores';
-import type { AuthFileItem, Config } from '@/types';
+import { USAGE_STATS_STALE_TIME_MS, useAuthFilesStore, useUsageStatsStore } from '@/stores';
+import type { Config } from '@/types';
 import type { CredentialInfo, SourceInfo } from '@/types/sourceInfo';
 import { buildSourceInfoMap, resolveSourceDisplay } from '@/utils/sourceResolver';
 import {
@@ -91,6 +90,7 @@ export function useTraceResolver(options: UseTraceResolverOptions): UseTraceReso
   const usageSnapshot = useUsageStatsStore((state) => state.usage);
   const usageScopeKey = useUsageStatsStore((state) => state.scopeKey);
   const loadUsageStats = useUsageStatsStore((state) => state.loadUsageStats);
+  const loadAuthFiles = useAuthFilesStore((state) => state.loadAuthFiles);
 
   const [traceLogLine, setTraceLogLine] = useState<ParsedLogLine | null>(null);
   const [traceAuthFileMap, setTraceAuthFileMap] = useState<Map<string, CredentialInfo>>(new Map());
@@ -130,17 +130,17 @@ export function useTraceResolver(options: UseTraceResolverOptions): UseTraceReso
           force: forceUsage,
           staleTimeMs: USAGE_STATS_STALE_TIME_MS
         }),
-        authFresh ? Promise.resolve(null) : authFilesApi.list().catch(() => null)
+        authFresh
+          ? Promise.resolve(null)
+          : loadAuthFiles({ staleTimeMs: TRACE_AUTH_CACHE_MS }).catch(() => null)
       ]);
 
       if (authFilesResponse !== null) {
-        const files = Array.isArray(authFilesResponse)
-          ? authFilesResponse
-          : (authFilesResponse as { files?: AuthFileItem[] })?.files;
+        const files = Array.isArray(authFilesResponse) ? authFilesResponse : null;
         if (Array.isArray(files)) {
           const map = new Map<string, CredentialInfo>();
           files.forEach((file) => {
-            const key = normalizeAuthIndex(file['auth_index'] ?? file.authIndex);
+            const key = normalizeAuthIndex(file.authIndex);
             if (!key) return;
             map.set(key, {
               name: file.name || key,
@@ -156,7 +156,7 @@ export function useTraceResolver(options: UseTraceResolverOptions): UseTraceReso
     } finally {
       setTraceLoading(false);
     }
-  }, [loadUsageStats, t, traceLoading, traceScopeKey]);
+  }, [loadAuthFiles, loadUsageStats, t, traceLoading, traceScopeKey]);
 
   const loadTraceUsageDetails = useCallback(async () => {
     await loadTraceUsageDetailsInternal(false);

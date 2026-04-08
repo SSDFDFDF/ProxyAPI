@@ -110,7 +110,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
               ? styles.kimiCard
               : '';
 
-  const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+  const rawAuthIndex = file.authIndex;
   const authIndexKey = normalizeAuthIndex(rawAuthIndex);
   const statusData =
     (authIndexKey && statusBarCache.get(authIndexKey)) || calculateStatusBarData([]);

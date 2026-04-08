@@ -16,6 +16,7 @@ import { getSearchTextFromError, getStatusFromError, isDisabledAuthFile } from '
 import { QuotaCard } from './QuotaCard';
 import type { QuotaStatusState } from './QuotaCard';
 import { useQuotaLoader } from './useQuotaLoader';
+import { useSessionScopeKey } from '@/stores/serverState/sessionScope';
 import type { QuotaConfig } from './quotaConfigs';
 import { useGridColumns } from './useGridColumns';
 import { IconRefreshCw } from '@/components/ui/icons';
@@ -23,7 +24,7 @@ import styles from '@/pages/QuotaPage.module.scss';
 
 type QuotaUpdater<T> = T | ((prev: T) => T);
 
-type QuotaSetter<T> = (updater: QuotaUpdater<T>) => void;
+type QuotaSetter<T> = (payload: { scopeKey: string; updater: QuotaUpdater<T> }) => void;
 
 type ViewMode = 'paged' | 'all';
 
@@ -117,6 +118,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   includeDisabled = false
 }: QuotaSectionProps<TState, TData>) {
   const { t } = useTranslation();
+  const scopeKey = useSessionScopeKey();
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const showNotification = useNotificationStore((state) => state.showNotification);
   const setQuota = useQuotaStore((state) => state[config.storeSetter]) as QuotaSetter<
@@ -194,20 +196,37 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   useEffect(() => {
     if (loading) return;
     if (filteredFiles.length === 0) {
-      setQuota({});
+      setQuota({
+        scopeKey,
+        updater: (prev) => (Object.keys(prev).length === 0 ? prev : {})
+      });
       return;
     }
-    setQuota((prev) => {
-      const nextState: Record<string, TState> = {};
-      filteredFiles.forEach((file) => {
-        const cached = prev[file.name];
-        if (cached) {
-          nextState[file.name] = cached;
+    setQuota({
+      scopeKey,
+      updater: (prev) => {
+        const nextState: Record<string, TState> = {};
+        let changed = false;
+
+        filteredFiles.forEach((file) => {
+          const cached = prev[file.name];
+          if (cached) {
+            nextState[file.name] = cached;
+          }
+        });
+
+        const prevKeys = Object.keys(prev);
+        const nextKeys = Object.keys(nextState);
+        if (prevKeys.length !== nextKeys.length) {
+          changed = true;
+        } else {
+          changed = prevKeys.some((key) => prev[key] !== nextState[key]);
         }
-      });
-      return nextState;
+
+        return changed ? nextState : prev;
+      }
     });
-  }, [filteredFiles, loading, setQuota]);
+  }, [filteredFiles, loading, scopeKey, setQuota]);
 
   const refreshQuotaForFile = useCallback(
     async (file: AuthFileItem) => {
@@ -215,33 +234,42 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       if (!includeDisabled && isDisabledAuthFile(file)) return;
       if (quota[file.name]?.status === 'loading') return;
 
-      setQuota((prev) => ({
-        ...prev,
-        [file.name]: config.buildLoadingState()
-      }));
+      setQuota({
+        scopeKey,
+        updater: (prev) => ({
+          ...prev,
+          [file.name]: config.buildLoadingState()
+        })
+      });
 
       try {
         const data = await config.fetchQuota(file, t);
-        setQuota((prev) => ({
-          ...prev,
-          [file.name]: config.buildSuccessState(data)
-        }));
+        setQuota({
+          scopeKey,
+          updater: (prev) => ({
+            ...prev,
+            [file.name]: config.buildSuccessState(data)
+          })
+        });
         showNotification(t('auth_files.quota_refresh_success', { name: file.name }), 'success');
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : t('common.unknown_error');
         const status = getStatusFromError(err);
         const searchText = getSearchTextFromError(err) ?? message;
-        setQuota((prev) => ({
-          ...prev,
-          [file.name]: config.buildErrorState(message, status, searchText)
-        }));
+        setQuota({
+          scopeKey,
+          updater: (prev) => ({
+            ...prev,
+            [file.name]: config.buildErrorState(message, status, searchText)
+          })
+        });
         showNotification(
           t('auth_files.quota_refresh_failed', { name: file.name, message }),
           'error'
         );
       }
     },
-    [config, disabled, includeDisabled, quota, setQuota, showNotification, t]
+    [config, disabled, includeDisabled, quota, scopeKey, setQuota, showNotification, t]
   );
 
   const titleNode = (

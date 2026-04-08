@@ -11,7 +11,7 @@ import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
-import { modelsApi, providersApi } from '@/services/api';
+import { modelsApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
 import type { GeminiKeyConfig } from '@/types';
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
@@ -21,6 +21,7 @@ import { excludedModelsToText, parseExcludedModels } from '@/components/provider
 import type { GeminiFormState } from '@/components/providers';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
 import styles from './AiProvidersPage.module.scss';
+import { saveGeminiProviderList } from '@/domains/providers/mutations';
 
 type LocationState = { fromAiProviders?: boolean } | null;
 
@@ -86,8 +87,6 @@ export function AiProvidersGeminiEditPage() {
   const disableControls = connectionStatus !== 'connected';
 
   const fetchConfig = useConfigStore((state) => state.fetchConfig);
-  const updateConfigValue = useConfigStore((state) => state.updateConfigValue);
-  const clearCache = useConfigStore((state) => state.clearCache);
 
   const [configs, setConfigs] = useState<GeminiKeyConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -422,9 +421,7 @@ export function AiProvidersGeminiEditPage() {
           ? configs.map((item, idx) => (idx === editIndex ? payload : item))
           : [...configs, payload];
 
-      await providersApi.saveGeminiKeys(nextList);
-      updateConfigValue('gemini-api-key', nextList);
-      clearCache('gemini-api-key');
+      await saveGeminiProviderList(nextList, configs);
       showNotification(
         editIndex !== null
           ? t('notification.gemini_key_updated')
@@ -444,14 +441,12 @@ export function AiProvidersGeminiEditPage() {
   }, [
     allowNextNavigation,
     canSave,
-    clearCache,
     configs,
     editIndex,
     form,
     handleBack,
     showNotification,
     t,
-    updateConfigValue,
   ]);
 
   const canOpenModelDiscovery =
