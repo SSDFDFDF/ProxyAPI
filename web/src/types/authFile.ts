@@ -31,7 +31,11 @@ export interface AuthFileItem {
   status?: string;
   statusMessage?: string;
   lastRefresh?: string | number;
-  modified?: number;
+  modified?: string | number;
+  ['created_at']?: string | number | null;
+  ['updated_at']?: string | number | null;
+  ['modtime']?: string | number | null;
+  ['last_refresh']?: string | number | null;
   [key: string]: unknown;
 }
 

@@ -45,6 +45,8 @@ import {
   QUOTA_PROVIDER_TYPES,
   clampCardPageSize,
   formatModified,
+  getAuthFileCreatedTime,
+  getAuthFileModifiedTime,
   getAuthFileIcon,
   getAuthFileStatusMessage,
   getTypeColor,
@@ -436,6 +438,8 @@ export function AuthFilesPage() {
       { value: 'default', label: t('auth_files.sort_default') },
       { value: 'az', label: t('auth_files.sort_az') },
       { value: 'priority', label: t('auth_files.sort_priority') },
+      { value: 'modified', label: t('auth_files.sort_modified') },
+      { value: 'created', label: t('auth_files.sort_created') },
     ],
     [t]
   );
@@ -530,22 +534,32 @@ export function AuthFilesPage() {
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
+    const compareByName = (a: AuthFileItem, b: AuthFileItem) => a.name.localeCompare(b.name);
+
     if (sortMode === 'default') {
       copy.sort((a, b) => {
         const providerA = normalizeProviderKey(String(a.provider ?? a.type ?? 'unknown'));
         const providerB = normalizeProviderKey(String(b.provider ?? b.type ?? 'unknown'));
         const providerCompare = providerA.localeCompare(providerB);
         if (providerCompare !== 0) return providerCompare;
-        return a.name.localeCompare(b.name);
+        return compareByName(a, b);
       });
     } else if (sortMode === 'az') {
-      copy.sort((a, b) => a.name.localeCompare(b.name));
+      copy.sort(compareByName);
     } else if (sortMode === 'priority') {
       copy.sort((a, b) => {
         const pa = parsePriorityValue(a.priority ?? a['priority']) ?? 0;
         const pb = parsePriorityValue(b.priority ?? b['priority']) ?? 0;
-        return pb - pa; // 高优先级排前面
+        return pb - pa || compareByName(a, b); // 高优先级排前面
       });
+    } else if (sortMode === 'modified') {
+      copy.sort(
+        (a, b) => getAuthFileModifiedTime(b) - getAuthFileModifiedTime(a) || compareByName(a, b)
+      );
+    } else if (sortMode === 'created') {
+      copy.sort(
+        (a, b) => getAuthFileCreatedTime(b) - getAuthFileCreatedTime(a) || compareByName(a, b)
+      );
     }
     return copy;
   }, [filtered, sortMode]);

@@ -45,6 +45,36 @@ export const INTEGER_STRING_PATTERN = /^[+-]?\d+$/;
 export const TRUTHY_TEXT_VALUES = new Set(['true', '1', 'yes', 'y', 'on']);
 export const FALSY_TEXT_VALUES = new Set(['false', '0', 'no', 'n', 'off']);
 
+const parseAuthFileTimestamp = (value: unknown): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value < 1e12 ? value * 1000 : value;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return 0;
+
+    const asNumber = Number(trimmed);
+    if (Number.isFinite(asNumber)) {
+      return asNumber < 1e12 ? asNumber * 1000 : asNumber;
+    }
+
+    const parsed = Date.parse(trimmed);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  return 0;
+};
+
+const readFirstValidAuthFileTimestamp = (values: unknown[]): number => {
+  for (const value of values) {
+    const timestamp = parseAuthFileTimestamp(value);
+    if (timestamp > 0) return timestamp;
+  }
+
+  return 0;
+};
+
 // 标签类型颜色配置 — 基于各提供商 Logo 品牌色调配，确保彼此不重复
 export const TYPE_COLORS: Record<string, TypeColorSet> = {
   // Qwen logo: 紫罗兰渐变 #6336E7 → #6F69F7
@@ -272,14 +302,32 @@ export function resolveAuthFileStats(file: AuthFileItem, stats: KeyStats): KeySt
   return defaultStats;
 }
 
+export const getAuthFileModifiedTime = (item: AuthFileItem): number =>
+  readFirstValidAuthFileTimestamp([
+    item['modtime'],
+    item.modified,
+    item['updated_at'],
+    item['last_refresh'],
+    item['lastRefresh'],
+    item['last_refreshed_at'],
+    item['lastRefreshedAt'],
+  ]);
+
+export const getAuthFileCreatedTime = (item: AuthFileItem): number =>
+  readFirstValidAuthFileTimestamp([
+    item['created_at'],
+    item['createdAt'],
+    item['create_time'],
+    item['createTime'],
+    item['ctime'],
+    item['birthtime'],
+  ]);
+
 export const formatModified = (item: AuthFileItem): string => {
-  const raw = item['modtime'] ?? item.modified;
-  if (!raw) return '-';
-  const asNumber = Number(raw);
-  const date =
-    Number.isFinite(asNumber) && !Number.isNaN(asNumber)
-      ? new Date(asNumber < 1e12 ? asNumber * 1000 : asNumber)
-      : new Date(String(raw));
+  const timestamp = getAuthFileModifiedTime(item);
+  if (timestamp <= 0) return '-';
+
+  const date = new Date(timestamp);
   return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
 };
 

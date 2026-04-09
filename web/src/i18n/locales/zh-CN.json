@@ -522,6 +522,8 @@
     "sort_default": "默认",
     "sort_az": "A-Z 名称",
     "sort_priority": "优先级",
+    "sort_modified": "修改时间",
+    "sort_created": "创建时间",
     "priority_display": "优先级",
     "page_size_label": "单页数量",
     "page_size_unit": "个/页",
