@@ -103,6 +103,25 @@ const normalizeApiKeyEntries = (entries: ApiKeyEntry[]) =>
     return acc;
   }, []);
 
+const serializeApiKeyEntries = (entries: ApiKeyEntry[]) =>
+  (entries ?? []).reduce<ApiKeyEntry[]>((acc, entry) => {
+    const apiKey = String(entry?.apiKey ?? '').trim();
+    const proxyUrl = String(entry?.proxyUrl ?? '').trim();
+    const headers =
+      entry?.headers && Object.keys(entry.headers).length > 0 ? entry.headers : undefined;
+
+    if (!apiKey && !proxyUrl && !headers) {
+      return acc;
+    }
+
+    acc.push({
+      apiKey,
+      proxyUrl: proxyUrl || undefined,
+      headers,
+    });
+    return acc;
+  }, []);
+
 const buildOpenAISignature = (form: OpenAIFormState, testModel: string) =>
   JSON.stringify({
     name: String(form.name ?? '').trim(),
@@ -438,11 +457,7 @@ export function AiProvidersOpenAIEditLayout() {
         prefix: form.prefix?.trim() || undefined,
         baseUrl,
         headers: buildHeaderObject(form.headers),
-        apiKeyEntries: form.apiKeyEntries.map((entry: ApiKeyEntry) => ({
-          apiKey: entry.apiKey.trim(),
-          proxyUrl: entry.proxyUrl?.trim() || undefined,
-          headers: entry.headers,
-        })),
+        apiKeyEntries: serializeApiKeyEntries(form.apiKeyEntries),
       };
       if (form.priority !== undefined && Number.isFinite(form.priority)) {
         payload.priority = Math.trunc(form.priority);

@@ -409,7 +409,7 @@
     "openai_add_modal_url_placeholder": "例如: https://openrouter.ai/api/v1",
     "openai_add_modal_keys_label": "API密钥",
     "openai_edit_modal_keys_label": "API密钥",
-    "openai_keys_hint": "每个密钥可搭配一个可选代理地址，更便于管理。",
+    "openai_keys_hint": "每个密钥可搭配一个可选代理地址，更便于管理；也支持在密钥输入框中直接粘贴多行内容，一行一个。",
     "openai_keys_add_btn": "添加密钥",
     "openai_key_placeholder": "输入 sk- 开头的密钥",
     "openai_proxy_placeholder": "可选代理 URL (如 socks5://...)",

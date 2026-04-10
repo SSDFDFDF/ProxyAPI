@@ -30,10 +30,11 @@ export type AuthFileQuotaSectionProps = {
   quotaType: QuotaProviderType;
   disableControls: boolean;
   includeDisabled?: boolean;
+  compact?: boolean;
 };
 
 export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
-  const { file, quotaType, disableControls, includeDisabled = false } = props;
+  const { file, quotaType, disableControls, includeDisabled = false, compact = false } = props;
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
   const scopeKey = useSessionScopeKey();
@@ -79,29 +80,40 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
       case 'claude':
         return CLAUDE_CONFIG.renderQuotaItems(quota as QuotaStoreState['claudeQuota'][string], t, {
           styles,
-          QuotaProgressBar
+          QuotaProgressBar,
+          variant: 'auth-file',
         }) as ReactNode;
       case 'antigravity':
         return ANTIGRAVITY_CONFIG.renderQuotaItems(
           quota as QuotaStoreState['antigravityQuota'][string],
           t,
-          { styles, QuotaProgressBar }
+          {
+            styles,
+            QuotaProgressBar,
+            variant: 'auth-file',
+          }
         ) as ReactNode;
       case 'codex':
         return CODEX_CONFIG.renderQuotaItems(quota as QuotaStoreState['codexQuota'][string], t, {
           styles,
-          QuotaProgressBar
+          QuotaProgressBar,
+          variant: 'auth-file',
         }) as ReactNode;
       case 'gemini-cli':
         return GEMINI_CLI_CONFIG.renderQuotaItems(
           quota as QuotaStoreState['geminiCliQuota'][string],
           t,
-          { styles, QuotaProgressBar }
+          {
+            styles,
+            QuotaProgressBar,
+            variant: 'auth-file',
+          }
         ) as ReactNode;
       case 'kimi':
         return KIMI_CONFIG.renderQuotaItems(quota as QuotaStoreState['kimiQuota'][string], t, {
           styles,
-          QuotaProgressBar
+          QuotaProgressBar,
+          variant: 'auth-file',
         }) as ReactNode;
       default:
         return null;
@@ -109,7 +121,8 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
   };
 
   const quotaStatus = quota?.status ?? 'idle';
-  const canRefreshQuota = !disableControls && (includeDisabled || !isDisabled);
+  const canRefreshQuota =
+    !disableControls && !isRuntimeOnlyAuthFile(file) && (includeDisabled || !isDisabled);
   const quotaErrorMessage = resolveQuotaErrorMessage(
     t,
     quota?.errorStatus,
@@ -117,7 +130,7 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
   );
 
   return (
-    <div className={styles.quotaSection}>
+    <div className={`${styles.quotaSection} ${compact ? styles.quotaSectionCompact : ''}`}>
       {quotaStatus === 'loading' ? (
         <div className={styles.quotaMessage}>{t(`${config.i18nPrefix}.loading`)}</div>
       ) : quotaStatus === 'idle' ? (
@@ -132,7 +145,7 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
       ) : quotaStatus === 'error' ? (
         <div className={styles.quotaError}>
           {t(`${config.i18nPrefix}.load_failed`, {
-            message: quotaErrorMessage
+            message: quotaErrorMessage,
           })}
         </div>
       ) : quota ? (

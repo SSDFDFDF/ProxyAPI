@@ -350,12 +350,22 @@
   min-width: 0;
 }
 
+.compactListNameRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .compactListName {
   font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.4;
   word-break: break-all;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .compactListNote {
@@ -373,18 +383,15 @@
 }
 
 .compactListQuotaColumn {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   min-width: 0;
+}
 
-  @include tablet {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  @include mobile {
-    grid-template-columns: 1fr;
-  }
+.compactListQuotaPlaceholder {
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 
 .compactListQuotaCard {
@@ -686,6 +693,108 @@
   padding-top: 0;
   margin-top: 2px;
   border-top: none;
+}
+
+.quotaRowsGrid {
+  display: grid;
+  grid-template-columns: repeat(var(--quota-grid-columns, 1), minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.quotaRowsGrid[data-multi='true'] .quotaRow {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+}
+
+.quotaRowsGrid[data-multi='true'] .quotaRowHeader {
+  align-items: flex-start;
+  gap: 6px;
+
+  @include mobile {
+    gap: 5px;
+  }
+}
+
+.quotaRowsGrid[data-multi='true'] .quotaModel {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.quotaRowsGrid[data-multi='true'] .quotaMeta {
+  width: 100%;
+  justify-content: space-between;
+  white-space: normal;
+  flex-wrap: wrap;
+}
+
+.quotaSectionCompact {
+  gap: 6px;
+
+  .quotaRowsGrid {
+    gap: 6px;
+  }
+
+  .quotaRowsGrid[data-multi='true'] .quotaRow {
+    padding: 8px 9px;
+    border-radius: 8px;
+  }
+
+  .quotaRow {
+    gap: 4px;
+  }
+
+  .quotaRowHeader {
+    gap: 6px;
+  }
+
+  .quotaModel {
+    font-size: 11px;
+  }
+
+  .quotaBar {
+    height: 4px;
+  }
+
+  .quotaMeta {
+    gap: 6px;
+    font-size: 10px;
+  }
+
+  .quotaMessage {
+    padding: 2px 0;
+    font-size: 11px;
+    text-align: left;
+  }
+
+  .quotaError {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  .codexPlan {
+    gap: 4px;
+    font-size: 10px;
+  }
+
+  .premiumPlanValue {
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+}
+
+@include mobile {
+  .quotaRowsGrid[data-multi='true'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .quotaSectionCompact .quotaRowsGrid[data-multi='true'] {
+    grid-template-columns: 1fr;
+  }
 }
 
 .quotaRow {
@@ -1113,6 +1222,53 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   letter-spacing: -0.01em;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fileNameRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.planBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.planBadgeDefault {
+  color: color-mix(in srgb, var(--text-primary) 92%, transparent);
+  background: color-mix(in srgb, var(--bg-tertiary) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 94%, transparent);
+}
+
+.planBadgePremium {
+  color: #6b4b00;
+  background: linear-gradient(135deg, #fff1bf 0%, #f2c94c 100%);
+  border: 1px solid rgba(201, 145, 0, 0.42);
+  box-shadow: 0 1px 2px rgba(120, 88, 7, 0.12);
+}
+
+.planBadgeCompact {
+  padding: 2px 7px;
+  font-size: 10px;
+}
+
+:global([data-theme='dark']) .planBadgePremium {
+  color: #fff0b0;
+  background: linear-gradient(135deg, #5a4310 0%, #8a6611 100%);
+  border-color: rgba(240, 190, 71, 0.38);
 }
 
 .cardMeta {
@@ -1213,6 +1369,16 @@
   word-break: break-word;
 }
 
+.healthStatusMessageCompact {
+  padding: 6px 8px;
+  font-size: 12px;
+
+  span {
+    @include text-ellipsis-multiline(1);
+    min-width: 0;
+  }
+}
+
 .messageIcon {
   flex-shrink: 0;
   margin-top: 1px;
@@ -1250,6 +1416,21 @@
 
 .cardStatsCompact .statValue {
   font-size: 12px;
+}
+
+.compactHealthPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.compactHealthStats {
+  flex-wrap: nowrap;
+
+  .statPill {
+    min-width: 0;
+  }
 }
 
 .statPill {

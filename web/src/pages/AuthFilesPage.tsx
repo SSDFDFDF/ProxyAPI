@@ -20,6 +20,7 @@ import { FilterTabs, type FilterTabItem } from '@/components/ui/FilterTabs';
 import { PageFilterSection } from '@/components/ui/PageFilterSection';
 import { PageTitleBlock } from '@/components/ui/PageTitleBlock';
 import { Input } from '@/components/ui/Input';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Select } from '@/components/ui/Select';
 import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
@@ -51,17 +52,18 @@ import {
   getAuthFileStatusMessage,
   getTypeColor,
   getTypeLabel,
-  hasAuthFileStatusMessage,
   isRuntimeOnlyAuthFile,
   normalizeProviderKey,
   parsePriorityValue,
-  resolveQuotaErrorMessage,
+  resolveAuthFileStats,
   type QuotaProviderType,
   type ResolvedTheme,
 } from '@/features/authFiles/constants';
 import { AuthFileCard } from '@/features/authFiles/components/AuthFileCard';
 import { AuthFileModelsModal } from '@/features/authFiles/components/AuthFileModelsModal';
 import { AuthFilesPrefixProxyEditorModal } from '@/features/authFiles/components/AuthFilesPrefixProxyEditorModal';
+import { AuthFileQuotaSection } from '@/features/authFiles/components/AuthFileQuotaSection';
+import { AuthFilePlanBadge } from '@/features/authFiles/components/AuthFilePlanBadge';
 import {
   BatchAuthFileFieldsModal,
   type BatchAuthFileFieldsState,
@@ -87,16 +89,14 @@ import {
 } from '@/features/authFiles/uiState';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
 import { useQuotaStore } from '@/stores/useQuotaStore';
-import { formatQuotaResetTime, isDisabledAuthFile, resolveAuthProvider } from '@/utils/quota';
+import { isDisabledAuthFile, resolveAuthProvider } from '@/utils/quota';
 import { applyAuthFileEditableValues } from '@/features/authFiles/authFileEditor';
-import type {
-  AntigravityQuotaState,
-  AuthFileItem,
-  ClaudeQuotaState,
-  CodexQuotaState,
-  GeminiCliQuotaState,
-  KimiQuotaState,
-} from '@/types';
+import {
+  getAuthFileHealthLabel,
+  resolveAuthFileHealthPresentation,
+  resolveAuthFileQuotaType,
+} from '@/features/authFiles/presentation';
+import type { AuthFileItem } from '@/types';
 import styles from './AuthFilesPage.module.scss';
 
 const easePower3Out = (progress: number) => 1 - (1 - progress) ** 4;
@@ -112,15 +112,6 @@ const INITIAL_BATCH_FIELD_STATE: BatchAuthFileFieldsState = {
   disableCooling: { enabled: false, value: '' },
   websockets: { enabled: false, value: false },
   note: { enabled: false, value: '' },
-};
-
-type QuotaSummaryItem = {
-  tone: 'normal' | 'muted' | 'danger';
-  label: string;
-  value?: string;
-  subtext?: string;
-  percent?: number | null;
-  actionable?: boolean;
 };
 
 type SearchableQuotaState = {
@@ -189,7 +180,6 @@ export function AuthFilesPage() {
   const [sortMode, setSortMode] = useState<AuthFilesSortMode>('default');
   const [batchActionBarVisible, setBatchActionBarVisible] = useState(false);
   const [batchQuotaRefreshing, setBatchQuotaRefreshing] = useState(false);
-  const [quotaRefreshingNames, setQuotaRefreshingNames] = useState<Record<string, boolean>>({});
   const [batchFieldsModalOpen, setBatchFieldsModalOpen] = useState(false);
   const [batchFieldsSaving, setBatchFieldsSaving] = useState(false);
   const [batchFields, setBatchFields] =
@@ -402,7 +392,12 @@ export function AuthFilesPage() {
   );
 
   const handleHeaderRefresh = useCallback(async () => {
-    await Promise.all([loadFiles(true), refreshKeyStats(), loadExcluded(true), loadModelAlias(true)]);
+    await Promise.all([
+      loadFiles(true),
+      refreshKeyStats(),
+      loadExcluded(true),
+      loadModelAlias(true),
+    ]);
   }, [loadFiles, refreshKeyStats, loadExcluded, loadModelAlias]);
 
   useHeaderRefresh(handleHeaderRefresh);
@@ -429,7 +424,10 @@ export function AuthFilesPage() {
   }, [files]);
 
   const filesMatchingProblemFilter = useMemo(
-    () => (problemOnly ? files.filter(hasAuthFileStatusMessage) : files),
+    () =>
+      problemOnly
+        ? files.filter((file) => resolveAuthFileHealthPresentation(file).isWarning)
+        : files,
     [files, problemOnly]
   );
 
@@ -500,9 +498,10 @@ export function AuthFilesPage() {
 
       let matchStatus = true;
       if (statusFilter !== 'all') {
-        const isRuntime = isRuntimeOnlyAuthFile(item);
-        const isDisabled = Boolean(item.disabled);
-        const hasWarning = hasAuthFileStatusMessage(item) && !isDisabled && !isRuntime;
+        const health = resolveAuthFileHealthPresentation(item);
+        const isRuntime = health.isRuntimeOnly;
+        const isDisabled = health.isDisabled;
+        const hasWarning = health.isWarning;
         if (statusFilter === 'active') {
           matchStatus = !isDisabled && !isRuntime && !hasWarning;
         } else if (statusFilter === 'disabled') {
@@ -578,18 +577,15 @@ export function AuthFilesPage() {
   );
   const selectedNames = useMemo(() => Array.from(selectedFiles), [selectedFiles]);
   const fileMap = useMemo(() => new Map(files.map((file) => [file.name, file])), [files]);
-  const selectedQuotaTargets = useMemo(
-    () => {
-      const existingFiles = selectedNames
-        .map((name) => fileMap.get(name))
-        .filter((file): file is AuthFileItem => Boolean(file));
+  const selectedQuotaTargets = useMemo(() => {
+    const existingFiles = selectedNames
+      .map((name) => fileMap.get(name))
+      .filter((file): file is AuthFileItem => Boolean(file));
 
-      return existingFiles.filter(
-        (file) => !isRuntimeOnlyAuthFile(file) && (includeDisabledQuota || !isDisabledAuthFile(file))
-      );
-    },
-    [fileMap, includeDisabledQuota, selectedNames]
-  );
+    return existingFiles.filter(
+      (file) => !isRuntimeOnlyAuthFile(file) && (includeDisabledQuota || !isDisabledAuthFile(file))
+    );
+  }, [fileMap, includeDisabledQuota, selectedNames]);
   const selectedHasStatusUpdating = useMemo(
     () => selectedNames.some((name) => statusUpdating[name] === true),
     [selectedNames, statusUpdating]
@@ -804,43 +800,6 @@ export function AuthFilesPage() {
     }
   }, [batchQuotaButtonDisabled, selectedQuotaTargets, showNotification, t]);
 
-  const handleSingleQuotaRefresh = useCallback(
-    async (file: (typeof pageItems)[number]) => {
-      if (
-        disableControls ||
-        isRuntimeOnlyAuthFile(file) ||
-        (!includeDisabledQuota && isDisabledAuthFile(file))
-      ) {
-        return;
-      }
-      if (quotaRefreshingNames[file.name]) return;
-
-      setQuotaRefreshingNames((prev) => ({ ...prev, [file.name]: true }));
-      try {
-        const [result] = await refreshQuotaForFiles([file], t);
-        if (!result || result.status === 'skipped') return;
-        if (result.status === 'success') {
-          showNotification(t('auth_files.quota_refresh_success', { name: file.name }), 'success');
-          return;
-        }
-        showNotification(
-          t('auth_files.quota_refresh_failed', {
-            name: file.name,
-            message: result.error || t('common.unknown_error'),
-          }),
-          'error'
-        );
-      } finally {
-        setQuotaRefreshingNames((prev) => {
-          const next = { ...prev };
-          delete next[file.name];
-          return next;
-        });
-      }
-    },
-    [disableControls, includeDisabledQuota, quotaRefreshingNames, showNotification, t]
-  );
-
   const copyTextWithNotification = useCallback(
     async (text: string) => {
       const copied = await copyToClipboard(text);
@@ -1021,144 +980,6 @@ export function AuthFilesPage() {
       ? t('auth_files.delete_all_button')
       : `${t('common.delete')} ${getTypeLabel(t, filter)}`;
 
-  const resolveQuotaSummary = useCallback(
-    (file: (typeof pageItems)[number]): QuotaSummaryItem[] | null => {
-      if (isRuntimeOnlyAuthFile(file)) return null;
-      if (!includeDisabledQuota && isDisabledAuthFile(file)) return null;
-
-      const provider = resolveAuthProvider(file);
-      const summaryFromStatus = (
-        i18nPrefix: string,
-        quota:
-          | AntigravityQuotaState
-          | ClaudeQuotaState
-          | CodexQuotaState
-          | GeminiCliQuotaState
-          | KimiQuotaState
-          | undefined
-      ): QuotaSummaryItem[] | null => {
-        if (!quota || quota.status === 'idle') {
-          return [{ tone: 'muted', label: t(`${i18nPrefix}.idle`), actionable: true }];
-        }
-        if (quota.status === 'loading') {
-          return [{ tone: 'muted', label: t(`${i18nPrefix}.loading`) }];
-        }
-        if (quota.status === 'error') {
-          return [
-            {
-              tone: 'danger',
-              label: resolveQuotaErrorMessage(
-                t,
-                quota.errorStatus,
-                quota.error || t('common.unknown_error')
-              ),
-            },
-          ];
-        }
-        return null;
-      };
-
-      if (provider === 'antigravity') {
-        const quota = antigravityQuota[file.name];
-        const fallback = summaryFromStatus('antigravity_quota', quota);
-        if (fallback) return fallback;
-        const groups = quota?.groups ?? [];
-        if (groups.length === 0) return null;
-        return groups.map((group) => ({
-          tone: 'normal' as const,
-          label: group.label,
-          value: `${Math.round(Math.max(0, group.remainingFraction) * 100)}%`,
-          subtext: formatQuotaResetTime(group.resetTime),
-          percent: Math.round(Math.max(0, group.remainingFraction) * 100),
-        }));
-      }
-
-      if (provider === 'claude') {
-        const quota = claudeQuota[file.name];
-        const fallback = summaryFromStatus('claude_quota', quota);
-        if (fallback) return fallback;
-        const windows = quota?.windows ?? [];
-        if (windows.length === 0) return null;
-        return windows.map((window) => {
-          const remainingPercent =
-            window.usedPercent === null ? null : Math.max(0, 100 - Math.round(window.usedPercent));
-          return {
-            tone: 'normal' as const,
-            label: window.label,
-            value: remainingPercent === null ? '-' : `${remainingPercent}%`,
-            subtext: window.resetLabel,
-            percent: remainingPercent,
-          };
-        });
-      }
-
-      if (provider === 'codex') {
-        const quota = codexQuota[file.name];
-        const fallback = summaryFromStatus('codex_quota', quota);
-        if (fallback) return fallback;
-        const windows = quota?.windows ?? [];
-        if (windows.length === 0) return null;
-        return windows.map((window) => {
-          const remainingPercent =
-            window.usedPercent === null ? null : Math.max(0, 100 - Math.round(window.usedPercent));
-          return {
-            tone: 'normal' as const,
-            label: window.label,
-            value: remainingPercent === null ? '-' : `${remainingPercent}%`,
-            subtext: window.resetLabel,
-            percent: remainingPercent,
-          };
-        });
-      }
-
-      if (provider === 'gemini-cli') {
-        const quota = geminiCliQuota[file.name];
-        const fallback = summaryFromStatus('gemini_cli_quota', quota);
-        if (fallback) return fallback;
-        const buckets = quota?.buckets ?? [];
-        if (buckets.length === 0) return null;
-        return buckets.map((bucket) => ({
-          tone: 'normal' as const,
-          label: bucket.label,
-          value:
-            bucket.remainingFraction === null
-              ? bucket.remainingAmount === null
-                ? '-'
-                : String(bucket.remainingAmount)
-              : `${Math.round(bucket.remainingFraction * 100)}%`,
-          subtext:
-            quota?.creditBalance != null
-              ? `Credits ${quota.creditBalance}`
-              : formatQuotaResetTime(bucket.resetTime),
-          percent:
-            bucket.remainingFraction === null ? null : Math.round(bucket.remainingFraction * 100),
-        }));
-      }
-
-      if (provider === 'kimi') {
-        const quota = kimiQuota[file.name];
-        const fallback = summaryFromStatus('kimi_quota', quota);
-        if (fallback) return fallback;
-        const rows = quota?.rows ?? [];
-        if (rows.length === 0) return null;
-        return rows.map((row) => {
-          const remainingPercent =
-            row.limit > 0 ? Math.max(0, Math.round(((row.limit - row.used) / row.limit) * 100)) : 0;
-          return {
-            tone: 'normal' as const,
-            label: row.label ?? t('nav.quota_management'),
-            value: `${remainingPercent}%`,
-            subtext: row.resetHint || '-',
-            percent: remainingPercent,
-          };
-        });
-      }
-
-      return null;
-    },
-    [antigravityQuota, claudeQuota, codexQuota, geminiCliQuota, includeDisabledQuota, kimiQuota, t]
-  );
-
   const renderCompactList = () => (
     <div className={styles.compactTableWrap}>
       <table className={styles.compactTable}>
@@ -1188,40 +1009,35 @@ export function AuthFilesPage() {
             <th className={styles.compactTableFileCol}>{t('auth_files.title_section')}</th>
             <th className={styles.compactTableQuotaCol}>{t('nav.quota_management')}</th>
             <th className={styles.compactTableHealthCol}>{t('auth_files.health_status_label')}</th>
-            <th className={styles.compactTableActionsCol}>
-              {t('common.action')}
-            </th>
+            <th className={styles.compactTableActionsCol}>{t('common.action')}</th>
           </tr>
         </thead>
         <tbody>
           {pageItems.map((file) => {
-            const isRuntimeOnly = isRuntimeOnlyAuthFile(file);
+            const health = resolveAuthFileHealthPresentation(file);
+            const isRuntimeOnly = health.isRuntimeOnly;
             const selected = selectedFiles.has(file.name);
-            const statusMessage = getAuthFileStatusMessage(file);
-            const hasStatusWarning = Boolean(statusMessage) && !file.disabled && !isRuntimeOnly;
+            const statusMessage = health.statusMessage;
             const typeLabel = getTypeLabel(t, file.type || 'unknown');
             const typeColor = getTypeColor(file.type || 'unknown', resolvedTheme);
             const providerIcon = getAuthFileIcon(file.type || 'unknown', resolvedTheme);
             const priorityValue = parsePriorityValue(file.priority ?? file['priority']);
+            const fileStats = resolveAuthFileStats(file, keyStats);
             const showModelsButton =
               !isRuntimeOnly || (file.type || '').toLowerCase() === 'aistudio';
-            const quotaSummary = resolveQuotaSummary(file);
-            const stateLabel = isRuntimeOnly
-              ? t('auth_files.type_virtual')
-              : file.disabled
-                ? t('auth_files.health_status_disabled')
-                : hasStatusWarning
-                  ? t('auth_files.health_status_warning')
-                  : t('auth_files.status_toggle_label');
-            const stateBadgeClass = isRuntimeOnly
-              ? styles.stateBadgeVirtual
-              : file.disabled
-                ? styles.stateBadgeDisabled
-                : hasStatusWarning
-                  ? styles.stateBadgeWarning
-                  : styles.stateBadgeActive;
-            const authIndexKey =
-              normalizeAuthIndex(file.authIndex ?? null) ?? '';
+            const quotaType = resolveAuthFileQuotaType(file);
+            const showQuotaSection =
+              quotaType && !health.isRuntimeOnly && (includeDisabledQuota || !health.isDisabled);
+            const stateLabel = getAuthFileHealthLabel(t, health.state);
+            const stateBadgeClass =
+              health.state === 'virtual'
+                ? styles.stateBadgeVirtual
+                : health.state === 'disabled'
+                  ? styles.stateBadgeDisabled
+                  : health.state === 'warning'
+                    ? styles.stateBadgeWarning
+                    : styles.stateBadgeActive;
+            const authIndexKey = normalizeAuthIndex(file.authIndex ?? null) ?? '';
             const statusData = statusBarCache.get(authIndexKey) ?? calculateStatusBarData([]);
 
             return (
@@ -1260,8 +1076,11 @@ export function AuthFilesPage() {
                         <span>{typeLabel}</span>
                       </div>
                       <div className={styles.compactListNameWrap}>
-                        <div className={styles.compactListName} title={file.name}>
-                          {file.name}
+                        <div className={styles.compactListNameRow}>
+                          <div className={styles.compactListName} title={file.name}>
+                            {file.name}
+                          </div>
+                          <AuthFilePlanBadge file={file} compact />
                         </div>
                         {typeof file.note === 'string' && file.note.trim() ? (
                           <div className={styles.compactListNote} title={file.note.trim()}>
@@ -1287,11 +1106,9 @@ export function AuthFilesPage() {
                       </span>
                     </div>
 
-                    {statusMessage ? (
+                    {health.showStatusMessage ? (
                       <div
-                        className={`${styles.compactListStatusMessage} ${
-                          hasStatusWarning ? styles.compactListStatusWarning : ''
-                        }`}
+                        className={`${styles.healthStatusMessage} ${styles.healthStatusMessageCompact}`}
                         title={statusMessage}
                       >
                         <IconInfo size={12} />
@@ -1303,73 +1120,39 @@ export function AuthFilesPage() {
 
                 <td>
                   <div className={styles.compactListQuotaColumn}>
-                    {quotaSummary?.length ? (
-                      quotaSummary.map((item) => (
-                        <div
-                          key={`${file.name}-${item.label}-${item.subtext ?? ''}`}
-                          className={`${styles.compactListQuotaCard} ${
-                            item.tone === 'danger'
-                              ? styles.compactListQuotaCardDanger
-                              : item.tone === 'muted'
-                                ? styles.compactListQuotaCardMuted
-                                : ''
-                          }`}
-                        >
-                          {item.actionable ? (
-                            <button
-                              type="button"
-                              className={`${styles.quotaMessage} ${styles.quotaMessageAction}`}
-                              onClick={() => void handleSingleQuotaRefresh(file)}
-                              disabled={disableControls || quotaRefreshingNames[file.name]}
-                            >
-                              {item.label}
-                            </button>
-                          ) : (
-                            <>
-                              <div className={styles.compactListQuotaHeader}>
-                                <span className={styles.compactListQuotaLabel}>{item.label}</span>
-                                {item.value ? (
-                                  <span className={styles.compactListQuotaValue}>{item.value}</span>
-                                ) : null}
-                              </div>
-                              <div className={styles.compactListQuotaBar}>
-                                <div
-                                  className={styles.compactListQuotaBarFill}
-                                  style={{
-                                    width: `${Math.max(0, Math.min(100, item.percent ?? 0))}%`,
-                                  }}
-                                />
-                              </div>
-                              {item.subtext ? (
-                                <div className={styles.compactListQuotaSubtext}>{item.subtext}</div>
-                              ) : null}
-                            </>
-                          )}
-                        </div>
-                      ))
+                    {showQuotaSection && quotaType ? (
+                      <AuthFileQuotaSection
+                        file={file}
+                        quotaType={quotaType}
+                        disableControls={disableControls}
+                        includeDisabled={includeDisabledQuota}
+                        compact
+                      />
                     ) : (
-                      <div
-                        className={`${styles.compactListQuotaCard} ${styles.compactListQuotaCardMuted}`}
-                      >
-                        <div className={styles.compactListQuotaHeader}>
-                          <span className={styles.compactListQuotaLabel}>-</span>
-                        </div>
-                      </div>
+                      <div className={styles.compactListQuotaPlaceholder}>-</div>
                     )}
                   </div>
                 </td>
 
                 <td>
-                  <div className={styles.compactListStats}>
-                    <ProviderStatusBar statusData={statusData} styles={styles} />
-                    <div className={styles.compactListStatsCounts}>
-                      <span className={styles.compactListStatsSuccess}>
-                        {statusData.totalSuccess}
-                      </span>
-                      <span className={styles.compactListStatsDivider}>/</span>
-                      <span className={styles.compactListStatsFailure}>
-                        {statusData.totalFailure}
-                      </span>
+                  <div className={styles.compactHealthPanel}>
+                    <div
+                      className={`${styles.cardStats} ${styles.cardStatsCompact} ${styles.compactHealthStats}`}
+                    >
+                      <div className={`${styles.statPill} ${styles.statSuccess}`}>
+                        <span className={styles.statLabel}>{t('stats.success')}</span>
+                        <span className={styles.statValue}>{fileStats.success}</span>
+                      </div>
+                      <div className={`${styles.statPill} ${styles.statFailure}`}>
+                        <span className={styles.statLabel}>{t('stats.failure')}</span>
+                        <span className={styles.statValue}>{fileStats.failure}</span>
+                      </div>
+                    </div>
+                    <div className={`${styles.statusPanel} ${styles.statusPanelCompact}`}>
+                      <div className={styles.statusPanelLabel}>
+                        <span>{t('auth_files.health_status_label')}</span>
+                      </div>
+                      <ProviderStatusBar statusData={statusData} styles={styles} />
                     </div>
                   </div>
                 </td>
@@ -1382,44 +1165,53 @@ export function AuthFilesPage() {
                         size="sm"
                         onClick={() => showModels(file)}
                         title={t('auth_files.models_button', { defaultValue: '模型' })}
+                        disabled={disableControls}
                       >
                         <IconModelCluster size={14} />
                       </Button>
                     ) : null}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openPrefixProxyEditor(file)}
-                      title={t('auth_files.prefix_proxy_manage', { defaultValue: '前缀代理' })}
-                    >
-                      <IconSettings size={14} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDownload(file.name)}
-                      title={t('auth_files.download_button')}
-                    >
-                      <IconDownload size={14} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(file.name)}
-                      disabled={disableControls || deleting === file.name}
-                      title={t('common.delete')}
-                    >
-                      <IconTrash2 size={14} />
-                    </Button>
                     {!isRuntimeOnly ? (
-                      <div className={styles.compactListToggle}>
-                        <ToggleSwitch
-                          checked={!file.disabled}
-                          onChange={(value) => handleStatusToggle(file, value)}
-                          disabled={disableControls || statusUpdating[file.name]}
-                          ariaLabel={t('auth_files.status_toggle_label')}
-                        />
-                      </div>
+                      <>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => openPrefixProxyEditor(file)}
+                          title={t('auth_files.prefix_proxy_manage', { defaultValue: '前缀代理' })}
+                          disabled={disableControls}
+                        >
+                          <IconSettings size={14} />
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleDownload(file.name)}
+                          title={t('auth_files.download_button')}
+                          disabled={disableControls}
+                        >
+                          <IconDownload size={14} />
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleDelete(file.name)}
+                          disabled={disableControls || deleting === file.name}
+                          title={t('common.delete')}
+                        >
+                          {deleting === file.name ? (
+                            <LoadingSpinner size={14} />
+                          ) : (
+                            <IconTrash2 size={14} />
+                          )}
+                        </Button>
+                        <div className={styles.compactListToggle}>
+                          <ToggleSwitch
+                            checked={!health.isDisabled}
+                            onChange={(value) => handleStatusToggle(file, value)}
+                            disabled={disableControls || statusUpdating[file.name]}
+                            ariaLabel={t('auth_files.status_toggle_label')}
+                          />
+                        </div>
+                      </>
                     ) : null}
                   </div>
                 </td>

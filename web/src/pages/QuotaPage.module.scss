@@ -289,33 +289,23 @@
 
 // 卡片渐变背景 — 基于 TYPE_COLORS light.bg 转 rgba
 .claudeCard {
-  background-image: linear-gradient(180deg,
-      rgba(251, 236, 228, 0.18),
-      rgba(251, 236, 228, 0));
+  background-image: linear-gradient(180deg, rgba(251, 236, 228, 0.18), rgba(251, 236, 228, 0));
 }
 
 .antigravityCard {
-  background-image: linear-gradient(180deg,
-      rgba(224, 247, 250, 0.12),
-      rgba(224, 247, 250, 0));
+  background-image: linear-gradient(180deg, rgba(224, 247, 250, 0.12), rgba(224, 247, 250, 0));
 }
 
 .codexCard {
-  background-image: linear-gradient(180deg,
-      rgba(234, 231, 255, 0.18),
-      rgba(234, 231, 255, 0));
+  background-image: linear-gradient(180deg, rgba(234, 231, 255, 0.18), rgba(234, 231, 255, 0));
 }
 
 .geminiCliCard {
-  background-image: linear-gradient(180deg,
-      rgba(224, 232, 255, 0.2),
-      rgba(224, 232, 255, 0));
+  background-image: linear-gradient(180deg, rgba(224, 232, 255, 0.2), rgba(224, 232, 255, 0));
 }
 
 .kimiCard {
-  background-image: linear-gradient(180deg,
-      rgba(220, 232, 255, 0.2),
-      rgba(220, 232, 255, 0));
+  background-image: linear-gradient(180deg, rgba(220, 232, 255, 0.2), rgba(220, 232, 255, 0));
 }
 
 .quotaSection {
@@ -325,6 +315,37 @@
   padding-top: $spacing-sm;
   margin-top: $spacing-xs;
   border-top: 1px dashed var(--border-color);
+}
+
+.quotaRowsGrid {
+  display: grid;
+  grid-template-columns: repeat(var(--quota-grid-columns, 1), minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.quotaRowsGrid[data-multi='true'] .quotaRow {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+}
+
+.quotaRowsGrid[data-multi='true'] .quotaRowHeader {
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.quotaRowsGrid[data-multi='true'] .quotaModel {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.quotaRowsGrid[data-multi='true'] .quotaMeta {
+  width: 100%;
+  justify-content: space-between;
+  white-space: normal;
+  flex-wrap: wrap;
 }
 
 .quotaRow {
@@ -343,6 +364,12 @@
   @include mobile {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@include mobile {
+  .quotaRowsGrid[data-multi='true'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -640,7 +667,10 @@
   display: flex;
   flex-direction: column;
   gap: $spacing-sm;
-  transition: transform $transition-fast, box-shadow $transition-fast, border-color $transition-fast;
+  transition:
+    transform $transition-fast,
+    box-shadow $transition-fast,
+    border-color $transition-fast;
 
   &:hover {
     transform: translateY(-2px);

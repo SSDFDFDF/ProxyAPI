@@ -160,6 +160,14 @@
   margin-top: 10px;
 }
 
+.apiKeySummaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .apiKeyEntriesLabel {
   font-size: 12px;
   font-weight: 600;
@@ -407,6 +415,10 @@
 }
 
 @include mobile {
+  .apiKeySummaryRow {
+    align-items: stretch;
+  }
+
   .statusTooltip {
     font-size: 12px;
     padding: 8px 12px;

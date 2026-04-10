@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
+import { useEffect, useCallback, useMemo, useRef, useState, type ClipboardEvent } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
@@ -26,6 +26,17 @@ const getErrorMessage = (err: unknown) => {
   if (typeof err === 'string') return err;
   return '';
 };
+
+const parseApiKeyImportLines = (text: string): string[] =>
+  text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+const isApiKeyEntryEmpty = (entry?: ApiKeyEntry): boolean =>
+  !String(entry?.apiKey ?? '').trim() &&
+  !String(entry?.proxyUrl ?? '').trim() &&
+  Object.keys(entry?.headers ?? {}).length === 0;
 
 // Status icon components
 function StatusLoadingIcon() {
@@ -397,6 +408,57 @@ export function AiProvidersOpenAIEditPage() {
       setTestMessage('');
     };
 
+    const importKeysAt = (idx: number, apiKeys: string[]) => {
+      if (apiKeys.length === 0) return;
+
+      const currentEntry = list[idx] ?? buildApiKeyEntry();
+      const next = [...list];
+
+      if (isApiKeyEntryEmpty(currentEntry)) {
+        const [firstKey, ...restKeys] = apiKeys;
+        next[idx] = { ...currentEntry, apiKey: firstKey };
+        if (restKeys.length > 0) {
+          next.splice(
+            idx + 1,
+            0,
+            ...restKeys.map((apiKey) => buildApiKeyEntry({ apiKey }))
+          );
+        }
+      } else {
+        next.splice(
+          idx + 1,
+          0,
+          ...apiKeys.map((apiKey) => buildApiKeyEntry({ apiKey }))
+        );
+      }
+
+      setForm((prev) => ({ ...prev, apiKeyEntries: next }));
+      resetDraftKeyTestStatuses(next.length);
+      setTestStatus('idle');
+      setTestMessage('');
+    };
+
+    const handleApiKeyPaste = (idx: number, event: ClipboardEvent<HTMLInputElement>) => {
+      const pastedText = event.clipboardData.getData('text');
+      if (!/[\r\n]/.test(pastedText)) {
+        return;
+      }
+
+      const pastedKeys = parseApiKeyImportLines(pastedText);
+      event.preventDefault();
+
+      if (pastedKeys.length === 0) {
+        return;
+      }
+
+      if (pastedKeys.length === 1) {
+        updateEntry(idx, 'apiKey', pastedKeys[0]);
+        return;
+      }
+
+      importKeysAt(idx, pastedKeys);
+    };
+
     return (
       <div className={styles.keyEntriesList}>
         <div className={styles.keyEntriesToolbar}>
@@ -447,6 +509,7 @@ export function AiProvidersOpenAIEditPage() {
                     type="text"
                     value={entry.apiKey}
                     onChange={(e) => updateEntry(index, 'apiKey', e.target.value)}
+                    onPaste={(e) => handleApiKeyPaste(index, e)}
                     disabled={saving || disableControls || isTestingKeys}
                     className={`input ${styles.keyTableInput}`}
                     placeholder={t('ai_providers.openai_key_placeholder')}

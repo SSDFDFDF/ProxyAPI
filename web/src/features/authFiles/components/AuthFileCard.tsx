@@ -12,17 +12,13 @@ import {
 } from '@/components/ui/icons';
 import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
 import type { AuthFileItem } from '@/types';
-import { isDisabledAuthFile, resolveAuthProvider } from '@/utils/quota';
 import { calculateStatusBarData, normalizeAuthIndex, type KeyStats } from '@/utils/usage';
 import { formatFileSize } from '@/utils/format';
 import {
-  QUOTA_PROVIDER_TYPES,
   formatModified,
   getAuthFileIcon,
-  getAuthFileStatusMessage,
   getTypeColor,
   getTypeLabel,
-  isRuntimeOnlyAuthFile,
   parsePriorityValue,
   resolveAuthFileStats,
   type QuotaProviderType,
@@ -30,9 +26,13 @@ import {
 } from '@/features/authFiles/constants';
 import type { AuthFileStatusBarData } from '@/features/authFiles/hooks/useAuthFilesStatusBarCache';
 import { AuthFileQuotaSection } from '@/features/authFiles/components/AuthFileQuotaSection';
+import {
+  getAuthFileHealthLabel,
+  resolveAuthFileHealthPresentation,
+  resolveAuthFileQuotaType,
+} from '@/features/authFiles/presentation';
+import { AuthFilePlanBadge } from '@/features/authFiles/components/AuthFilePlanBadge';
 import styles from '@/pages/AuthFilesPage.module.scss';
-
-const HEALTHY_STATUS_MESSAGES = new Set(['ok', 'healthy', 'ready', 'success', 'available']);
 
 export type AuthFileCardProps = {
   file: AuthFileItem;
@@ -52,12 +52,6 @@ export type AuthFileCardProps = {
   onDelete: (name: string) => void;
   onToggleStatus: (file: AuthFileItem, enabled: boolean) => void;
   onToggleSelect: (name: string) => void;
-};
-
-const resolveQuotaType = (file: AuthFileItem): QuotaProviderType | null => {
-  const provider = resolveAuthProvider(file);
-  if (!QUOTA_PROVIDER_TYPES.has(provider as QuotaProviderType)) return null;
-  return provider as QuotaProviderType;
 };
 
 export function AuthFileCard(props: AuthFileCardProps) {
@@ -83,8 +77,9 @@ export function AuthFileCard(props: AuthFileCardProps) {
   } = props;
 
   const fileStats = resolveAuthFileStats(file, keyStats);
-  const isRuntimeOnly = isRuntimeOnlyAuthFile(file);
-  const isDisabled = isDisabledAuthFile(file);
+  const health = resolveAuthFileHealthPresentation(file);
+  const isRuntimeOnly = health.isRuntimeOnly;
+  const isDisabled = health.isDisabled;
   const isAistudio = (file.type || '').toLowerCase() === 'aistudio';
   const showModelsButton = !isRuntimeOnly || isAistudio;
   const typeColor = getTypeColor(file.type || 'unknown', resolvedTheme);
@@ -92,7 +87,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
   const providerIcon = getAuthFileIcon(file.type || 'unknown', resolvedTheme);
 
   const quotaType =
-    quotaFilterType && resolveQuotaType(file) === quotaFilterType ? quotaFilterType : null;
+    quotaFilterType && resolveAuthFileQuotaType(file) === quotaFilterType ? quotaFilterType : null;
 
   const showQuotaLayout =
     Boolean(quotaType) && !isRuntimeOnly && !compact && (includeDisabledQuota || !isDisabled);
@@ -114,28 +109,19 @@ export function AuthFileCard(props: AuthFileCardProps) {
   const authIndexKey = normalizeAuthIndex(rawAuthIndex);
   const statusData =
     (authIndexKey && statusBarCache.get(authIndexKey)) || calculateStatusBarData([]);
-  const rawStatusMessage = getAuthFileStatusMessage(file);
-  const hasStatusWarning =
-    Boolean(rawStatusMessage) && !HEALTHY_STATUS_MESSAGES.has(rawStatusMessage.toLowerCase());
+  const rawStatusMessage = health.statusMessage;
 
   const priorityValue = parsePriorityValue(file.priority ?? file['priority']);
   const noteValue = typeof file.note === 'string' ? file.note.trim() : '';
-  const stateLabel = isRuntimeOnly
-    ? t('auth_files.type_virtual') || '虚拟认证文件'
-    : file.disabled
-      ? t('auth_files.health_status_disabled')
-      : hasStatusWarning
-        ? t('auth_files.health_status_warning')
-        : rawStatusMessage
-          ? t('auth_files.health_status_healthy')
-          : t('auth_files.status_toggle_label');
-  const stateBadgeClass = isRuntimeOnly
-    ? styles.stateBadgeVirtual
-    : file.disabled
-      ? styles.stateBadgeDisabled
-      : hasStatusWarning
-        ? styles.stateBadgeWarning
-        : styles.stateBadgeActive;
+  const stateLabel = getAuthFileHealthLabel(t, health.state);
+  const stateBadgeClass =
+    health.state === 'virtual'
+      ? styles.stateBadgeVirtual
+      : health.state === 'disabled'
+        ? styles.stateBadgeDisabled
+        : health.state === 'warning'
+          ? styles.stateBadgeWarning
+          : styles.stateBadgeActive;
 
   return (
     <div
@@ -185,9 +171,12 @@ export function AuthFileCard(props: AuthFileCardProps) {
                 </span>
                 <span className={`${styles.stateBadge} ${stateBadgeClass}`}>{stateLabel}</span>
               </div>
-              <span className={styles.fileName} title={file.name}>
-                {file.name}
-              </span>
+              <div className={styles.fileNameRow}>
+                <span className={styles.fileName} title={file.name}>
+                  {file.name}
+                </span>
+                <AuthFilePlanBadge file={file} compact={compact} />
+              </div>
               {!compact && noteValue && (
                 <div className={styles.noteText} title={noteValue}>
                   <span className={styles.noteLabel}>{t('auth_files.note_display')}</span>
@@ -218,7 +207,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
             )}
           </div>
 
-          {rawStatusMessage && hasStatusWarning && (
+          {health.showStatusMessage && (
             <div className={styles.healthStatusMessage} title={rawStatusMessage}>
               <IconInfo className={styles.messageIcon} size={14} />
               <span>{rawStatusMessage}</span>
