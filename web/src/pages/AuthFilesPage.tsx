@@ -565,6 +565,20 @@ export function AuthFilesPage() {
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const currentPage = Math.min(page, totalPages);
+  const pageOptions = useMemo(
+    () =>
+      Array.from({ length: totalPages }, (_, index) => {
+        const pageNumber = index + 1;
+        return {
+          value: String(pageNumber),
+          label: t('auth_files.pagination_page_option', {
+            page: pageNumber,
+            defaultValue: `Page ${pageNumber}`,
+          }),
+        };
+      }),
+    [t, totalPages]
+  );
   const start = (currentPage - 1) * pageSize;
   const pageItems = sorted.slice(start, start + pageSize);
   const selectablePageItems = useMemo(
@@ -1433,6 +1447,14 @@ export function AuthFilesPage() {
                 <Button
                   variant="secondary"
                   size="sm"
+                  onClick={() => setPage(1)}
+                  disabled={currentPage <= 1}
+                >
+                  {t('auth_files.pagination_first')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setPage(Math.max(1, currentPage - 1))}
                   disabled={currentPage <= 1}
                 >
@@ -1445,6 +1467,16 @@ export function AuthFilesPage() {
                     count: sorted.length,
                   })}
                 </div>
+                <div className={styles.pageJumpControl}>
+                  <span className={styles.pageJumpLabel}>{t('auth_files.pagination_jump_label')}</span>
+                  <Select
+                    className={styles.pageSelect}
+                    value={String(currentPage)}
+                    options={pageOptions}
+                    onChange={(value) => setPage(Number(value))}
+                    ariaLabel={t('auth_files.pagination_jump_aria')}
+                  />
+                </div>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -1452,6 +1484,14 @@ export function AuthFilesPage() {
                   disabled={currentPage >= totalPages}
                 >
                   {t('auth_files.pagination_next')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setPage(totalPages)}
+                  disabled={currentPage >= totalPages}
+                >
+                  {t('auth_files.pagination_last')}
                 </Button>
               </div>
             )}

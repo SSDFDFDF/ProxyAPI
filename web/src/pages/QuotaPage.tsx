@@ -88,6 +88,10 @@ export function QuotaPage() {
       }),
     [activeTab, quotaTabs, resolvedTheme]
   );
+  const hasAnyQuotaFiles = useMemo(
+    () => QUOTA_TABS.some((tab) => files.some((file) => tab.config.matchesFile(file))),
+    [files]
+  );
 
   const activeConfig = quotaTabs.find((tab) => tab.id === activeTab)?.config ?? null;
 
@@ -163,9 +167,11 @@ export function QuotaPage() {
 
       {(error || authFilesError) && <div className={styles.errorBox}>{error || authFilesError}</div>}
 
-      <PageFilterSection className={styles.filterSection}>
-        <FilterTabs items={quotaTabItems} />
-      </PageFilterSection>
+      {hasAnyQuotaFiles ? (
+        <PageFilterSection className={styles.filterSection}>
+          <FilterTabs items={quotaTabItems} />
+        </PageFilterSection>
+      ) : null}
 
       {(() => {
         if (!activeConfig) return null;

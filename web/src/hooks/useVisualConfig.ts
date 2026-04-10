@@ -143,29 +143,39 @@ function getPortError(value: string): 'port_range' | undefined {
   return parsed >= 1 && parsed <= 65535 ? undefined : 'port_range';
 }
 
+function isDirectOrNone(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'direct' || normalized === 'none';
+}
+
 export function getVisualConfigValidationErrors(
   values: VisualConfigValues
 ): VisualConfigValidationErrors {
-  const trimmedNames = values.networkProfiles.map((profile) => profile.name.trim());
+  const normalizedNetworkProfiles = values.networkProfiles.map((profile) => ({
+    name: profile.name.trim(),
+    proxyUrl: profile.proxyUrl.trim(),
+    resinUrl: profile.resinUrl.trim(),
+    resinPlatformName: profile.resinPlatformName.trim(),
+  }));
+  const trimmedNames = normalizedNetworkProfiles.map((profile) => profile.name);
   const validNames = new Set(trimmedNames.filter(Boolean));
-  const hasDuplicateProfile = new Set(trimmedNames.filter(Boolean)).size !== trimmedNames.filter(Boolean).length;
-  const hasInvalidProfileName = trimmedNames.some(
-    (name) => !!name && (name.toLowerCase() === 'direct' || name.toLowerCase() === 'none')
-  );
-  const hasIncompleteResinProfile = values.networkProfiles.some((profile) => {
-    const resinUrl = profile.resinUrl.trim();
-    const platform = profile.resinPlatformName.trim();
-    return (!!resinUrl || !!platform) && (!resinUrl || !platform);
+  const nonEmptyNames = trimmedNames.filter(Boolean);
+  const hasDuplicateProfile = new Set(nonEmptyNames).size !== nonEmptyNames.length;
+  const hasInvalidProfileName = trimmedNames.some((name) => !!name && isDirectOrNone(name));
+  const hasIncompleteResinProfile = normalizedNetworkProfiles.some((profile) => {
+    return (!!profile.resinUrl || !!profile.resinPlatformName) && (!profile.resinUrl || !profile.resinPlatformName);
   });
-  const selectorValues = [
-    values.networkDefaultProfile,
-    values.networkAIProvidersProfile,
-    values.networkAuthFilesProfile,
-    values.networkOAuthLoginProfile,
-  ].map((value) => value.trim());
-  const hasMissingSelectorProfile = selectorValues.some(
-    (value) => !!value && value.toLowerCase() !== 'direct' && value.toLowerCase() !== 'none' && !validNames.has(value)
-  );
+  const hasMissingProfile = normalizedNetworkProfiles.some((profile) => {
+    const hasAnyValue =
+      !!profile.name || !!profile.proxyUrl || !!profile.resinUrl || !!profile.resinPlatformName;
+    if (!hasAnyValue) return false;
+    if (!profile.name) return true;
+    return !profile.proxyUrl && !profile.resinUrl && !profile.resinPlatformName;
+  });
+  const hasMissingSelectorProfile = (value: string) => {
+    const trimmedValue = value.trim();
+    return !!trimmedValue && !isDirectOrNone(trimmedValue) && !validNames.has(trimmedValue);
+  };
 
   return {
     port: getPortError(values.port),
@@ -179,11 +189,21 @@ export function getVisualConfigValidationErrors(
         ? 'proxy_profile_invalid_name'
         : hasIncompleteResinProfile
           ? 'proxy_resin_incomplete'
+          : hasMissingProfile
+            ? 'proxy_profile_missing'
           : undefined,
-    networkDefaultProfile: hasMissingSelectorProfile ? 'proxy_profile_selector_missing' : undefined,
-    networkAIProvidersProfile: hasMissingSelectorProfile ? 'proxy_profile_selector_missing' : undefined,
-    networkAuthFilesProfile: hasMissingSelectorProfile ? 'proxy_profile_selector_missing' : undefined,
-    networkOAuthLoginProfile: hasMissingSelectorProfile ? 'proxy_profile_selector_missing' : undefined,
+    networkDefaultProfile: hasMissingSelectorProfile(values.networkDefaultProfile)
+      ? 'proxy_profile_selector_missing'
+      : undefined,
+    networkAIProvidersProfile: hasMissingSelectorProfile(values.networkAIProvidersProfile)
+      ? 'proxy_profile_selector_missing'
+      : undefined,
+    networkAuthFilesProfile: hasMissingSelectorProfile(values.networkAuthFilesProfile)
+      ? 'proxy_profile_selector_missing'
+      : undefined,
+    networkOAuthLoginProfile: hasMissingSelectorProfile(values.networkOAuthLoginProfile)
+      ? 'proxy_profile_selector_missing'
+      : undefined,
     'streaming.keepaliveSeconds': getNonNegativeIntegerError(values.streaming.keepaliveSeconds),
     'streaming.bootstrapRetries': getNonNegativeIntegerError(values.streaming.bootstrapRetries),
     'streaming.nonstreamKeepaliveInterval': getNonNegativeIntegerError(

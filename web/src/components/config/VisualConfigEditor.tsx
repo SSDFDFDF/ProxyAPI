@@ -313,7 +313,16 @@ export function VisualConfigEditor({
         title: t('config_management.visual.sections.network.title'),
         description: t('config_management.visual.sections.network.description'),
         icon: IconTrendingUp,
-        errorCount: countErrors(['requestRetry', 'maxRetryCredentials', 'maxRetryInterval']),
+        errorCount: countErrors([
+          'requestRetry',
+          'maxRetryCredentials',
+          'maxRetryInterval',
+          'networkProfiles',
+          'networkDefaultProfile',
+          'networkAIProvidersProfile',
+          'networkAuthFilesProfile',
+          'networkOAuthLoginProfile',
+        ]),
       },
       {
         id: 'quota',

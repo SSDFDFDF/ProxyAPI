@@ -1908,6 +1908,39 @@
   border-top: 1px solid var(--border-color);
 }
 
+.pageJumpControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  min-height: 36px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  background-color: var(--bg-primary);
+
+  @include mobile {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+.pageJumpLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.pageSelect {
+  min-width: 112px;
+  width: 112px;
+
+  :global(.select-trigger) {
+    min-height: 36px;
+    height: 36px;
+  }
+}
+
 .batchActionContainer {
   position: fixed;
   left: var(--content-center-x, 50%);
@@ -1975,6 +2008,7 @@
   padding: $spacing-xs $spacing-md;
   background-color: var(--bg-secondary);
   border-radius: $radius-md;
+  white-space: nowrap;
 }
 
 .oauthCardsGrid {
