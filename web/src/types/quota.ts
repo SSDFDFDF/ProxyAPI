@@ -2,6 +2,20 @@
  * Quota management types.
  */
 
+export type QuotaStatus = 'idle' | 'loading' | 'success' | 'error';
+export type QuotaRefreshSource = 'manual' | 'poll' | 'single';
+
+export interface QuotaRefreshMeta {
+  isRefreshing?: boolean;
+  lastAttemptAt?: number;
+  lastUpdatedAt?: number;
+  refreshSource?: QuotaRefreshSource;
+  consecutiveFailures?: number;
+  nextRetryAt?: number | null;
+  lastRefreshError?: string;
+  lastRefreshErrorStatus?: number;
+}
+
 // Theme types
 export type ThemeColors = { bg: string; text: string; border?: string };
 export type TypeColorSet = { light: ThemeColors; dark?: ThemeColors };
@@ -184,8 +198,8 @@ export interface ClaudeQuotaWindow {
   resetLabel: string;
 }
 
-export interface ClaudeQuotaState {
-  status: 'idle' | 'loading' | 'success' | 'error';
+export interface ClaudeQuotaState extends QuotaRefreshMeta {
+  status: QuotaStatus;
   windows: ClaudeQuotaWindow[];
   extraUsage?: ClaudeExtraUsage | null;
   planType?: string | null;
@@ -203,8 +217,8 @@ export interface AntigravityQuotaGroup {
   resetTime?: string;
 }
 
-export interface AntigravityQuotaState {
-  status: 'idle' | 'loading' | 'success' | 'error';
+export interface AntigravityQuotaState extends QuotaRefreshMeta {
+  status: QuotaStatus;
   groups: AntigravityQuotaGroup[];
   searchText?: string;
   error?: string;
@@ -221,8 +235,8 @@ export interface GeminiCliQuotaBucketState {
   modelIds?: string[];
 }
 
-export interface GeminiCliQuotaState {
-  status: 'idle' | 'loading' | 'success' | 'error';
+export interface GeminiCliQuotaState extends QuotaRefreshMeta {
+  status: QuotaStatus;
   buckets: GeminiCliQuotaBucketState[];
   tierLabel?: string | null;
   tierId?: string | null;
@@ -241,8 +255,8 @@ export interface CodexQuotaWindow {
   resetLabel: string;
 }
 
-export interface CodexQuotaState {
-  status: 'idle' | 'loading' | 'success' | 'error';
+export interface CodexQuotaState extends QuotaRefreshMeta {
+  status: QuotaStatus;
   windows: CodexQuotaWindow[];
   planType?: string | null;
   searchText?: string;
@@ -304,8 +318,8 @@ export interface KimiQuotaRow {
   resetHint?: string;
 }
 
-export interface KimiQuotaState {
-  status: 'idle' | 'loading' | 'success' | 'error';
+export interface KimiQuotaState extends QuotaRefreshMeta {
+  status: QuotaStatus;
   rows: KimiQuotaRow[];
   searchText?: string;
   error?: string;

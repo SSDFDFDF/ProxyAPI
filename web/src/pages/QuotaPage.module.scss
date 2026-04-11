@@ -139,6 +139,34 @@
   white-space: nowrap;
 }
 
+.autoRefreshControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+
+  @include mobile {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+}
+
+.autoRefreshHint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+
+  @include mobile {
+    white-space: normal;
+    width: 100%;
+  }
+}
+
 .statsInfo {
   padding: 8px 12px;
   background-color: var(--bg-secondary);
